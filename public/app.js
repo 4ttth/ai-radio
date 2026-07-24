@@ -120,6 +120,8 @@ function hydrate() {
   $('introEvery').value = cfg.dj?.introEverySongs ?? 1;
   $('handoffEvery').value = cfg.dj?.handoffEveryMinutes ?? cfg.dj?.handoffEvery ?? 60;
   $('styleNotes').value = cfg.dj?.styleNotes || '';
+  $('voiceEngine').value = cfg.voiceEngine || 'tts';
+  updateVoiceEngineHint();
   $('talkOver').checked = cfg.talkOverMusic !== false;
 
   // News
@@ -154,11 +156,20 @@ function toggleGenreField() {
   $('genreField').hidden = $('mode').value !== 'genre';
 }
 
+function updateVoiceEngineHint() {
+  const eng = $('voiceEngine').value;
+  const m = state.models || {};
+  $('voiceEngineHint').textContent = eng === 'native'
+    ? `Live API model ${m.native || 'native-audio'}. More natural, different quota; auto-falls back to TTS if a session fails.`
+    : `Dedicated TTS model ${m.tts || ''}. Best for reading scripts/news exactly.`;
+}
+
 function renderStatus() {
   const l = state.library;
   $('statusLines').innerHTML = `
     Gemini key: <b>${state.hasKey ? 'configured ✓' : 'missing ✗'}</b><br>
-    Models: <b>${state.models.text}</b> / <b>${state.models.tts}</b><br>
+    Voice engine: <b>${state.config.voiceEngine === 'native' ? 'native audio (Live API)' : 'TTS'}</b><br>
+    Models: text <b>${state.models.text}</b> · tts <b>${state.models.tts}</b> · native <b>${state.models.native || '—'}</b><br>
     Library folder: <b>${l.folder || '(none)'}</b><br>
     ffmpeg (BPM analysis): <b>${l.ffmpeg ? 'available' : 'not installed'}</b>`;
   if (!state.hasKey) hint('⚠️ No Gemini key — the station plays music, but DJs & news are silent until you add GEMINI_API_KEY to .env and restart.');
@@ -379,6 +390,7 @@ function wire() {
   $('introEvery').onchange = (e) => saveConfig({ dj: { introEverySongs: Number(e.target.value) } });
   $('handoffEvery').onchange = (e) => saveConfig({ dj: { handoffEveryMinutes: Number(e.target.value) } });
   $('styleNotes').onchange = (e) => saveConfig({ dj: { styleNotes: e.target.value } });
+  $('voiceEngine').onchange = (e) => { saveConfig({ voiceEngine: e.target.value }, true); updateVoiceEngineHint(); };
   $('talkOver').onchange = (e) => saveConfig({ talkOverMusic: e.target.checked });
 
   $('newsEnabled').onchange = (e) => saveConfig({ news: { enabled: e.target.checked } });

@@ -6,6 +6,7 @@
   "talkOverMusic": true,
   "duckVolume": 0.22,
   "crossfadeSeconds": 4,
+  "voiceEngine": "tts",
   "dj": {
     "introEverySongs": 1,
     "handoffEveryMinutes": 60,

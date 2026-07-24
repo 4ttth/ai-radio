@@ -120,6 +120,14 @@
             <label for="styleNotes">Extra direction (optional)</label>
             <input id="styleNotes" placeholder="e.g. keep it chill, mention the weather" />
           </div>
+          <div class="field">
+            <label for="voiceEngine">Voice engine</label>
+            <select id="voiceEngine">
+              <option value="tts">TTS model — verbatim, cheap (recommended)</option>
+              <option value="native">Native audio · Live API (experimental)</option>
+            </select>
+            <div class="sub" id="voiceEngineHint"></div>
+          </div>
           <label class="check"><input type="checkbox" id="talkOver" checked /> Talk over the music (duck)</label>
         </details>
 

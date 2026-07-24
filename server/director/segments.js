@@ -5,19 +5,33 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { synthesizeSpeech } from '../ai/gemini.js';
+import { synthesizeSpeechNative } from '../ai/liveVoice.js';
 import { CACHE_DIR } from '../config.js';
 
 const hash = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 16);
 
-// Synthesize `script` in `voiceName`, cache by content, return a servable URL.
-export async function renderVoice(script, voiceName) {
-  const id = hash(`${voiceName}::${script}`);
+// Synthesize `script` in `voiceName` using the chosen engine ('tts' or
+// 'native'), cache by content+engine, and return a servable URL. If the native
+// (Live API) engine fails, fall back to TTS so the radio keeps talking.
+export async function renderVoice(script, voiceName, { engine = 'tts' } = {}) {
+  const id = hash(`${engine}::${voiceName}::${script}`);
   const file = path.join(CACHE_DIR, `${id}.wav`);
-  if (!existsSync(file)) {
-    const wav = await synthesizeSpeech(script, { voiceName });
-    await writeFile(file, wav);
+  let engineUsed = engine;
+  if (existsSync(file)) return { id, audioUrl: `/api/audio/${id}`, engineUsed: `${engine} (cached)` };
+
+  let wav;
+  if (engine === 'native') {
+    try {
+      wav = await synthesizeSpeechNative(script, { voiceName });
+    } catch (err) {
+      wav = await synthesizeSpeech(script, { voiceName });
+      engineUsed = `tts (native failed: ${err.message})`;
+    }
+  } else {
+    wav = await synthesizeSpeech(script, { voiceName });
   }
-  return { id, audioUrl: `/api/audio/${id}` };
+  await writeFile(file, wav);
+  return { id, audioUrl: `/api/audio/${id}`, engineUsed };
 }
 
 export function cachePath(id) {

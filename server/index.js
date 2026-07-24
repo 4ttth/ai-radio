@@ -36,11 +36,12 @@ async function main() {
   let modelLine = 'n/a (no key)';
   if (hasGeminiKey()) {
     const m = await getModels();
-    modelLine = `${m.text} / ${m.tts}${m.discovered ? '' : ' (fallback — model list unavailable)'}`;
+    modelLine = `text ${m.text} · tts ${m.tts} · native ${m.native}${m.discovered ? '' : ' (fallback — model list unavailable)'}`;
   }
   app.log.info('──────────────────────────────────────────────');
   app.log.info(`  📻  AI Radio is on the air:  ${url}`);
   app.log.info(`  Gemini key:  ${hasGeminiKey() ? 'configured' : 'MISSING — add GEMINI_API_KEY to .env'}`);
+  app.log.info(`  Voice:       ${cfg.voiceEngine === 'native' ? 'native audio (Live API)' : 'TTS'}`);
   app.log.info(`  Models:      ${modelLine}`);
   app.log.info(`  ffmpeg:      ${ff}`);
   app.log.info('──────────────────────────────────────────────');

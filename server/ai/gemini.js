@@ -89,7 +89,11 @@ async function callModel(model, body, { retries = 2, timeout = 60000 } = {}) {
 // Models get retired often, so instead of trusting a hardcoded name we ask
 // the key which models it actually has (ListModels) and pick the best. A blank
 // .env means "auto"; an override is honored only if it's real and available.
-const FALLBACK = { text: 'gemini-flash-latest', tts: 'gemini-3.1-flash-tts-preview' };
+const FALLBACK = {
+  text: 'gemini-flash-latest',
+  tts: 'gemini-3.1-flash-tts-preview',
+  native: 'gemini-2.5-flash-native-audio-latest',
+};
 // Known-dead IDs we must never use, even if left over in a stale .env.
 const RETIRED = new Set([
   'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-pro',
@@ -135,6 +139,15 @@ function scoreTts(id) {
   return s;
 }
 
+function scoreNative(id) {
+  const n = id.toLowerCase();
+  if (!n.includes('native-audio')) return -1;
+  let s = n.includes('latest') ? 5000 : ver(id) * 100;
+  if (n.includes('dialog')) s += 50;
+  if (n.includes('thinking')) s -= 20; // prefer plain dialog for a voice-over
+  return s;
+}
+
 function bestBy(list, scorer) {
   let best = null;
   let bestScore = 0;
@@ -159,6 +172,7 @@ export async function getModels(force = false) {
   modelCache = {
     text: useOverride(env.textModel, list) || bestBy(gen, scoreText) || FALLBACK.text,
     tts: useOverride(env.ttsModel, list) || bestBy(list, scoreTts) || FALLBACK.tts,
+    native: useOverride(env.nativeModel, list) || bestBy(list, scoreNative) || FALLBACK.native,
     discovered: list.length > 0,
     available: list.map((m) => m.id),
   };

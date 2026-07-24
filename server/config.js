@@ -19,6 +19,7 @@ export const env = {
   // Blank = auto-detect the best available model for this key (see ai/gemini.js).
   textModel: process.env.GEMINI_TEXT_MODEL || '',
   ttsModel: process.env.GEMINI_TTS_MODEL || '',
+  nativeModel: process.env.GEMINI_NATIVE_MODEL || '', // Live API native-audio voice engine
   maxRpm: Number(process.env.GEMINI_MAX_RPM) || 8,
   musicFolder: process.env.MUSIC_FOLDER || '',
   port: Number(process.env.PORT || 4123),

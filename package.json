@@ -26,6 +26,7 @@
     "fastify": "^5.2.0",
     "music-metadata": "^10.4.2",
     "music-tempo": "^1.0.0",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "ws": "^8.18.0"
   }
 }

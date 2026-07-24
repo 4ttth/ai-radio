@@ -35,7 +35,7 @@ async function buildState() {
   const models = await getModels();
   return {
     hasKey: hasGeminiKey(),
-    models: { text: models.text, tts: models.tts, discovered: models.discovered },
+    models: { text: models.text, tts: models.tts, native: models.native, discovered: models.discovered },
     config,
     branding,
     djRoster: roster,
@@ -168,9 +168,10 @@ export default async function routes(app) {
 
       if (!result || !result.text) return { skip: true, reason: 'empty' };
       const voice = result.dj?.voice || 'Kore';
+      const engine = cfg.voiceEngine === 'native' ? 'native' : 'tts';
       const t0 = Date.now();
-      const audio = await renderVoice(result.text, voice);
-      req.log.info(`segment(${type}) voice=${voice} chars=${result.text.length} tts=${Date.now() - t0}ms`);
+      const audio = await renderVoice(result.text, voice, { engine });
+      req.log.info(`segment(${type}) voice=${voice} engine=${audio.engineUsed} chars=${result.text.length} ms=${Date.now() - t0}`);
       return {
         type,
         script: result.text,

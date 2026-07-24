@@ -80,11 +80,21 @@ See **[docs/SETUP.md](docs/SETUP.md)** for getting a Gemini key, installing ffmp
 | `GEMINI_API_KEY` | — | Your Gemini key (`AIzaSy…`) |
 | `GEMINI_TEXT_MODEL` | *(auto)* | Force a text model; blank auto-detects the best your key has |
 | `GEMINI_TTS_MODEL` | *(auto)* | Force a TTS model; blank auto-detects the best your key has |
+| `GEMINI_NATIVE_MODEL` | *(auto)* | Force the native-audio (Live API) model; used only when Voice engine = Native |
 | `GEMINI_MAX_RPM` | `8` | Request-per-minute throttle (raise on a paid key) |
 | `MUSIC_FOLDER` | — | Optional default library path |
 | `PORT` / `HOST` | `4123` / `127.0.0.1` | Server bind |
 
 Everything else (station name, branding, shuffle mode, DJ cadence, feeds, duck level, crossfade) is edited live in the UI and saved to `data/config.json`.
+
+### Voice engines
+
+Under **AI DJ → Voice engine** you can pick how DJ/news audio is produced:
+
+- **TTS model** (default) — the dedicated Gemini TTS model over a simple REST call. Reads scripts and news *verbatim*, is cheap, and caches perfectly. Best for a radio station. Free-tier requests/minute are limited, which is why segments are pre-generated and cached.
+- **Native audio (Live API)** — a native-audio model over a WebSocket (`BidiGenerateContent`). More expressive/natural and uses a different quota model (sessions rather than strict RPM), but it's conversational by design, so it's pinned with a system instruction to read text verbatim. **Experimental.** If a live session fails for any reason, it automatically falls back to the TTS model so the radio never goes silent.
+
+Both cache identical clips to disk, so switching engines re-uses nothing between them but never re-synthesizes the same line twice within an engine.
 
 ---
 
@@ -94,7 +104,8 @@ Everything else (station name, branding, shuffle mode, DJ cadence, feeds, duck l
 server/
   index.js            Fastify server + static UI + startup scan
   config.js           env + persisted station config + branding catalogue
-  ai/gemini.js        Gemini client: text, TTS, throttle, PCM→WAV
+  ai/gemini.js        Gemini client: text, TTS, model auto-detect, throttle, PCM→WAV
+  ai/liveVoice.js     Native-audio (Live API) voice engine over WebSocket (optional)
   ai/dj.js            DJ persona scripts (intro / handoff / welcome)
   ai/news.js          RSS fetch + spoken news bulletin
   library/scanner.js  folder scan, tags, filename fallback
