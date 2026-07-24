@@ -48,6 +48,9 @@ export class RadioPlayer {
       });
       this.decks.push({ el, gain });
     }
+
+    // Browsers suspend the AudioContext when the tab is backgrounded; resume on return.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.resume(); });
     this.ready = true;
   }
 
@@ -116,11 +119,21 @@ export class RadioPlayer {
     }
     this.duck();
     return new Promise((resolve) => {
-      const node = this.ctx.createBufferSource();
-      node.buffer = audioBuf;
-      node.connect(this.voiceGain);
-      node.onended = () => { this.unduck(); resolve(); };
-      node.start();
+      let done = false;
+      const finish = () => { if (done) return; done = true; this.unduck(); resolve(); };
+      try {
+        const node = this.ctx.createBufferSource();
+        node.buffer = audioBuf;
+        node.connect(this.voiceGain);
+        node.onended = finish;
+        node.start();
+      } catch (e) {
+        finish();
+        return;
+      }
+      // Safety net: never hang the show if 'onended' doesn't fire
+      // (e.g. the tab was backgrounded and the context suspended mid-clip).
+      setTimeout(finish, Math.ceil((audioBuf.duration + 5) * 1000));
     });
   }
 }

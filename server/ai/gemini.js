@@ -8,7 +8,10 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 let chain = Promise.resolve();
 let lastStart = 0;
 function throttle() {
-  const minGap = 60000 / Math.max(1, env.maxRpm);
+  // Clamp RPM to a sane range so a blank/0/huge value can't wedge us
+  // (e.g. rpm 0 would otherwise space calls 60s apart).
+  const rpm = Math.min(60, Math.max(1, env.maxRpm || 8));
+  const minGap = 60000 / rpm;
   const run = chain.then(async () => {
     const wait = Math.max(0, lastStart + minGap - Date.now());
     if (wait > 0) await sleep(wait);
@@ -21,6 +24,17 @@ function throttle() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// fetch with a hard timeout so a stalled request can never hang forever.
+async function fetchWithTimeout(url, opts = {}, ms = 60000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class GeminiError extends Error {
   constructor(message, status) {
     super(message);
@@ -30,7 +44,7 @@ export class GeminiError extends Error {
   }
 }
 
-async function callModel(model, body, { retries = 2 } = {}) {
+async function callModel(model, body, { retries = 2, timeout = 60000 } = {}) {
   if (!hasGeminiKey()) {
     throw new GeminiError('No Gemini API key configured (set GEMINI_API_KEY in .env).', 401);
   }
@@ -42,12 +56,16 @@ async function callModel(model, body, { retries = 2 } = {}) {
     await throttle();
     let res;
     try {
-      res = await fetch(url, {
+      res = await fetchWithTimeout(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
-      });
+      }, timeout);
     } catch (netErr) {
+      // A timeout means "too slow" — don't keep retrying and stacking delay.
+      if (netErr.name === 'AbortError') {
+        throw new GeminiError(`Gemini ${model} timed out after ${timeout}ms`, 504);
+      }
       if (attempt++ < retries) {
         await sleep(1000 * 2 ** attempt);
         continue;
@@ -83,7 +101,7 @@ let modelCache = null;
 async function listModels() {
   if (!hasGeminiKey()) return [];
   try {
-    const res = await fetch(`${BASE}/models?pageSize=1000&key=${encodeURIComponent(env.geminiKey)}`);
+    const res = await fetchWithTimeout(`${BASE}/models?pageSize=1000&key=${encodeURIComponent(env.geminiKey)}`, {}, 10000);
     if (!res.ok) return [];
     const data = await res.json();
     return (data.models || []).map((m) => ({
@@ -170,7 +188,7 @@ export async function generateText(prompt, { temperature = 0.9, maxOutputTokens 
   const data = await withModel('text', (model) => callModel(model, {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig,
-  }));
+  }, { timeout: 30000 }));
 
   const parts = data?.candidates?.[0]?.content?.parts || [];
   const out = parts.map((p) => p.text || '').join('').trim();
@@ -200,7 +218,7 @@ export async function synthesizeSpeech(text, { voiceName = 'Kore' } = {}) {
         voiceConfig: { prebuiltVoiceConfig: { voiceName } },
       },
     },
-  }));
+  }, { timeout: 60000 }));
 
   const inline = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)?.inlineData;
   if (!inline?.data) {

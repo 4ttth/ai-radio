@@ -168,7 +168,9 @@ export default async function routes(app) {
 
       if (!result || !result.text) return { skip: true, reason: 'empty' };
       const voice = result.dj?.voice || 'Kore';
+      const t0 = Date.now();
       const audio = await renderVoice(result.text, voice);
+      req.log.info(`segment(${type}) voice=${voice} chars=${result.text.length} tts=${Date.now() - t0}ms`);
       return {
         type,
         script: result.text,
