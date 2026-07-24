@@ -1,0 +1,27 @@
+{
+  "stationName": "Neon Pulse",
+  "brandingId": "neon-pulse",
+  "shuffleMode": "random",
+  "genreFilter": null,
+  "talkOverMusic": true,
+  "duckVolume": 0.22,
+  "crossfadeSeconds": 4,
+  "dj": {
+    "introEverySongs": 1,
+    "handoffEveryMinutes": 60,
+    "styleNotes": ""
+  },
+  "news": {
+    "enabled": true,
+    "everyMinutes": 45,
+    "maxItems": 3,
+    "defaultMood": "Upbeat",
+    "feeds": [
+      {
+        "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "category": "World",
+        "mood": "Serious"
+      }
+    ]
+  }
+}

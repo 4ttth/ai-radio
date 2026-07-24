@@ -1,0 +1,239 @@
+<title>AI Radio — Station Imaging Board</title>
+<style>
+  /* ── Frame tokens (theme-aware). Station cards carry their OWN brand
+     colors and stay committed across themes — a brand identity shouldn't invert. ── */
+  :root{
+    --ground:#0b0b0f; --panel:#131319; --hair:#26262f; --ink:#ecebf2; --muted:#8b8b99;
+    --frame-accent:#c7c7d2; --signal:#ff4438;
+    --mono:"SF Mono",SFMono-Regular,ui-monospace,"Cascadia Code","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:1180px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --ground:#eeece6; --panel:#ffffff; --hair:#dbd8cf; --ink:#1a1a1f; --muted:#6c6c74; --frame-accent:#3a3a44; }
+  }
+  :root[data-theme="dark"]{ --ground:#0b0b0f; --panel:#131319; --hair:#26262f; --ink:#ecebf2; --muted:#8b8b99; --frame-accent:#c7c7d2; }
+  :root[data-theme="light"]{ --ground:#eeece6; --panel:#ffffff; --hair:#dbd8cf; --ink:#1a1a1f; --muted:#6c6c74; --frame-accent:#3a3a44; }
+
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.5;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:40px 22px 72px;}
+
+  /* ── Masthead ── */
+  .mast{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    border-bottom:1px solid var(--hair);padding-bottom:16px;}
+  .mast h1{font-size:clamp(22px,3.4vw,34px);margin:0;font-weight:800;letter-spacing:-0.02em;
+    text-transform:uppercase;text-wrap:balance;}
+  .mast .sub{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:0.04em;}
+  .onair{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;
+    letter-spacing:0.18em;color:var(--muted);}
+  .onair .dot{width:9px;height:9px;border-radius:50%;background:var(--signal);
+    box-shadow:0 0 0 0 color-mix(in srgb,var(--signal) 70%,transparent);animation:pulse 1.8s infinite;}
+  @keyframes pulse{70%{box-shadow:0 0 0 8px transparent;}100%{box-shadow:0 0 0 0 transparent;}}
+  .lede{color:var(--muted);max-width:62ch;margin:18px 0 26px;font-size:15px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  /* ── Tuner dial hero ── */
+  .dial{position:relative;height:88px;border:1px solid var(--hair);border-radius:14px;
+    background:var(--panel);margin-bottom:40px;overflow:hidden;}
+  .dial .ticks{position:absolute;inset:0 0 46px 0;
+    background-image:repeating-linear-gradient(90deg,var(--hair) 0 1px,transparent 1px 100%);
+    background-size:calc(100%/36) 100%;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);opacity:.7;}
+  .dial .ticks.major{inset:0 0 40px 0;background-size:calc(100%/9) 100%;opacity:1;}
+  .dial .scale{position:absolute;left:0;right:0;bottom:8px;height:34px;font-family:var(--mono);
+    font-size:11px;color:var(--muted);}
+  .dial .num{position:absolute;transform:translateX(-50%);bottom:0;}
+  .marker{position:absolute;top:6px;transform:translateX(-50%);display:flex;flex-direction:column;
+    align-items:center;gap:5px;cursor:pointer;text-decoration:none;}
+  .marker .pin{width:2px;height:30px;border-radius:2px;background:var(--mk);}
+  .marker .cap{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--mk);
+    white-space:nowrap;background:color-mix(in srgb,var(--mk) 14%,var(--panel));
+    padding:2px 7px;border-radius:999px;border:1px solid color-mix(in srgb,var(--mk) 40%,transparent);
+    transition:transform .15s ease;}
+  .marker:hover .cap{transform:translateY(-2px);}
+  .marker .freq{position:absolute;top:34px;font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap;}
+
+  /* ── Card grid ── */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;}
+  @media (max-width:820px){.grid{grid-template-columns:1fr;}}
+
+  .card{--pri:#fff;--acc:#fff;--txt:#fff;--mut:#aaa;--srf:#111;--bgc:#000;
+    position:relative;border-radius:18px;padding:22px;overflow:hidden;color:var(--txt);
+    background:radial-gradient(120% 120% at 100% 0%,color-mix(in srgb,var(--acc) 16%,transparent),transparent 60%),
+      linear-gradient(160deg,var(--srf),var(--bgc));
+    border:1px solid color-mix(in srgb,var(--pri) 26%,transparent);
+    box-shadow:0 18px 40px -24px #000;transition:transform .25s ease,box-shadow .25s ease;}
+  .card:hover{transform:translateY(-4px);box-shadow:0 26px 54px -24px #000;}
+  .card .top{display:flex;gap:14px;align-items:flex-start;}
+  .logo{width:52px;height:52px;flex:0 0 auto;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--acc) 35%,transparent));}
+  .logo svg{width:100%;height:100%;display:block;}
+  .name{font-size:26px;font-weight:800;letter-spacing:-0.01em;text-transform:uppercase;line-height:1;margin:0;}
+  .freqtag{font-family:var(--mono);font-size:12px;color:var(--acc);margin-top:5px;letter-spacing:.05em;}
+  .tag{color:var(--mut);font-style:italic;margin-top:2px;font-size:13.5px;}
+
+  .label{font-family:var(--mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--mut);margin:20px 0 8px;}
+  .format{font-size:13.5px;color:color-mix(in srgb,var(--txt) 90%,transparent);}
+  .persona{font-size:14px;margin:6px 0 0;color:color-mix(in srgb,var(--txt) 92%,transparent);}
+
+  .swatches{display:flex;gap:7px;flex-wrap:wrap;}
+  .sw{display:flex;flex-direction:column;gap:4px;align-items:center;}
+  .sw i{width:34px;height:26px;border-radius:7px;display:block;border:1px solid rgba(255,255,255,.14);}
+  .sw span{font-family:var(--mono);font-size:8.5px;color:var(--mut);}
+
+  .djs{display:flex;flex-direction:column;gap:9px;}
+  .dj{display:flex;align-items:center;gap:11px;}
+  .dj .av{width:32px;height:32px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:13px;color:#0009;background:linear-gradient(135deg,var(--pri),var(--acc));}
+  .dj .info{font-size:13px;line-height:1.35;}
+  .dj .info b{font-weight:700;}
+  .dj .voice{font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:999px;margin-left:6px;
+    background:color-mix(in srgb,var(--acc) 20%,transparent);color:var(--txt);letter-spacing:.03em;}
+  .dj .info small{color:var(--mut);display:block;}
+
+  .ids{display:flex;flex-direction:column;gap:8px;}
+  .id-line{display:flex;gap:9px;font-size:13.5px;align-items:baseline;
+    padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--pri) 9%,transparent);}
+  .id-line::before{content:"“";color:var(--acc);font-size:20px;line-height:0;font-weight:800;transform:translateY(4px);}
+
+  footer{margin-top:44px;border-top:1px solid var(--hair);padding-top:20px;color:var(--muted);font-size:13.5px;}
+  footer code{font-family:var(--mono);background:color-mix(in srgb,var(--frame-accent) 12%,transparent);
+    padding:1px 6px;border-radius:5px;color:var(--ink);}
+  footer b{color:var(--ink);}
+
+  /* entrance */
+  .card,.dial,.marker{animation:rise .6s cubic-bezier(.2,.7,.2,1) both;}
+  .dial{animation-delay:.02s;}
+  @keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important;}
+    .card:hover{transform:none;}
+  }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <h1>Station Imaging Board</h1>
+      <div class="sub">AI&nbsp;RADIO · SIX CHANNELS · v1</div>
+    </div>
+    <span class="onair"><span class="dot"></span> ON AIR — 6 BRANDINGS READY</span>
+  </header>
+
+  <p class="lede">Six ready-to-run station identities for your AI radio app. Each is a complete <b>imaging package</b> — name, tagline, format, color system, logo mark, a three-DJ roster with assigned <b>Gemini TTS voices</b>, and sample on-air station IDs. Pick one in the app, rename it to your brand, or remix them in <b>branding/stations.json</b>.</p>
+
+  <div class="dial" id="dial" aria-hidden="true">
+    <div class="ticks"></div>
+    <div class="ticks major"></div>
+    <div class="scale" id="scale"></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <b>Using these:</b> in the app's <b>Station branding</b> panel, choose a preset — it recolors the interface and loads that station's DJ roster. Rename the station anytime; your custom name sticks. Voices (<code>Aoede</code>, <code>Puck</code>, <code>Charon</code>…) map to Gemini's prebuilt TTS voices, so each DJ sounds distinct. Want your own station? Copy a block in <code>branding/stations.json</code> and change the colors, DJs, and imaging lines.
+  </footer>
+</div>
+
+<script>
+const STATIONS = [
+  { id:"neon-pulse", name:"Neon Pulse", freq:"101.9", tagline:"The city never sleeps.",
+    format:"Electronic / Dance — house, techno, synthwave, EDM",
+    personality:"High-energy, futuristic, nocturnal. Never shouts — it glides.",
+    colors:{bg:"#0a0118",surface:"#160b2e",primary:"#00e5ff",accent:"#ff2fd0",text:"#f4eaff",muted:"#8b7bb0"},
+    logo:"<svg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'><defs><linearGradient id='np' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#00e5ff'/><stop offset='1' stop-color='#ff2fd0'/></linearGradient></defs><rect x='6' y='6' width='108' height='108' rx='26' fill='none' stroke='url(#np)' stroke-width='4'/><path d='M34 82V38l52 44V38' fill='none' stroke='url(#np)' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/></svg>",
+    djs:[["Vega","Aoede","the after-hours host who makes everything sound smooth"],["Flux","Puck","hyped, playful, lives for the build and the drop"],["Nyx","Enceladus","deep, hypnotic, midnight-to-dawn whisper"]],
+    imaging:["You're locked into Neon Pulse — where the city never sleeps.","Neon Pulse. Turn it up until the walls glow.","This is the sound after midnight."] },
+
+  { id:"golden-hour", name:"Golden Hour", freq:"98.3", tagline:"Today's biggest hits.",
+    format:"Pop / Top 40 — Billboard Hot 100, feel-good radio",
+    personality:"Bright, warm, inclusive — like sunshine through a car window.",
+    colors:{bg:"#1c1206",surface:"#2c1d0c",primary:"#ffb43a",accent:"#ff6f61",text:"#fff6e9",muted:"#c7a373"},
+    logo:"<svg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'><defs><linearGradient id='gh' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#ffb43a'/><stop offset='1' stop-color='#ff6f61'/></linearGradient></defs><circle cx='60' cy='66' r='30' fill='url(#gh)'/><g stroke='url(#gh)' stroke-width='6' stroke-linecap='round'><line x1='60' y1='10' x2='60' y2='24'/><line x1='96' y1='30' x2='87' y2='39'/><line x1='24' y1='30' x2='33' y2='39'/><line x1='104' y1='66' x2='114' y2='66'/><line x1='6' y1='66' x2='16' y2='66'/></g></svg>",
+    djs:[["Sunny","Leda","youthful, bubbly morning-show energy"],["Marco","Puck","charismatic afternoon host, quick with a chart fact"],["Belle","Autonoe","smooth evening host, cozy and reassuring"]],
+    imaging:["Golden Hour — today's biggest hits, all day long.","You're glowing with Golden Hour.","The hits you love. This is Golden Hour."] },
+
+  { id:"the-cipher", name:"The Cipher", freq:"105.6", tagline:"Where the beat lives.",
+    format:"Hip-hop / R&B — rap, trap, soul, neo-soul, slow jams",
+    personality:"Smooth, confident, streetwise. Gives the artist their flowers.",
+    colors:{bg:"#0d0d0f",surface:"#18181c",primary:"#e8b64a",accent:"#c8102e",text:"#f5f3ee",muted:"#9a948a"},
+    logo:"<svg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'><circle cx='60' cy='60' r='50' fill='none' stroke='#e8b64a' stroke-width='4'/><circle cx='60' cy='60' r='34' fill='none' stroke='#c8102e' stroke-width='3'/><circle cx='60' cy='60' r='9' fill='#e8b64a'/><g stroke='#e8b64a' stroke-width='4' stroke-linecap='round'><line x1='60' y1='16' x2='60' y2='30'/><line x1='60' y1='90' x2='60' y2='104'/><line x1='16' y1='60' x2='30' y2='60'/><line x1='90' y1='60' x2='104' y2='60'/></g></svg>",
+    djs:[["Silk","Callirrhoe","velvet-smooth quiet-storm host for the slow jams"],["Rome","Charon","deep, authoritative, knows every producer and sample"],["Nova","Despina","sharp, current, plugged into what's next"]],
+    imaging:["The Cipher — where the beat lives.","Locked in. This is The Cipher.","Bars, grooves, and everything in between."] },
+
+  { id:"static-and-stone", name:"Static & Stone", freq:"94.7", tagline:"Loud since day one.",
+    format:"Rock / Indie / Alt — classic rock, indie, alternative, punk",
+    personality:"Gritty, real, a bit irreverent — like you're in the room with the band.",
+    colors:{bg:"#141210",surface:"#23201c",primary:"#e2622a",accent:"#d9d2c5",text:"#efe9df",muted:"#8c847a"},
+    logo:"<svg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'><rect x='10' y='10' width='100' height='100' rx='6' fill='none' stroke='#d9d2c5' stroke-width='3'/><path d='M30 88 L52 32 L60 62 L70 44 L90 88' fill='none' stroke='#e2622a' stroke-width='8' stroke-linejoin='round' stroke-linecap='round'/></svg>",
+    djs:[["Ziggy","Fenrir","loud, restless, lives for the riff"],["June","Kore","dry wit, indie tastemaker, knows the deep cuts"],["Mac","Iapetus","grizzled late-night rock veteran, storyteller"]],
+    imaging:["Static & Stone — loud since day one.","Turn it up till the neighbors complain.","No filler. All riffs."] },
+
+  { id:"driftwave", name:"Driftwave", freq:"91.5", tagline:"Everything, and the vibe in between.",
+    format:"Eclectic — chill, lo-fi, downtempo, genre-fluid crossover",
+    personality:"Warm, thoughtful, unhurried. A trusted curator finding the thread.",
+    colors:{bg:"#071417",surface:"#0f2329",primary:"#37c8b0",accent:"#e8c98a",text:"#eaf6f4",muted:"#7fa39d"},
+    logo:"<svg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'><circle cx='60' cy='60' r='50' fill='none' stroke='#37c8b0' stroke-width='3'/><path d='M18 66 q10.5 -18 21 0 t21 0 t21 0 t21 0' fill='none' stroke='#37c8b0' stroke-width='5' stroke-linecap='round'/><path d='M18 54 q10.5 -18 21 0 t21 0 t21 0 t21 0' fill='none' stroke='#e8c98a' stroke-width='4' stroke-linecap='round' opacity='0.8'/></svg>",
+    djs:[["Marlow","Charon","warm, unhurried, the late-evening curator"],["Isla","Autonoe","gentle, curious, loves an unexpected pairing"],["Koa","Umbriel","soft-spoken, atmospheric, dawn-and-dusk host"]],
+    imaging:["Driftwave — everything, and the vibe in between.","Let it drift. This is Driftwave.","No genres. Just good ones."] },
+
+  { id:"aurelia-fm", name:"Aurelia FM", freq:"88.9", tagline:"Sound with a little soul.",
+    format:"Soulful crossover — soul, jazz-tinged, worldly adult contemporary",
+    personality:"Velvety, worldly, elegant. Evening-glass-of-wine energy.",
+    colors:{bg:"#160a10",surface:"#26121c",primary:"#d4a24c",accent:"#8e2f4a",text:"#f6ecdf",muted:"#b08a7e"},
+    logo:"<svg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'><defs><linearGradient id='au' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#d4a24c'/><stop offset='1' stop-color='#8e2f4a'/></linearGradient></defs><circle cx='60' cy='60' r='50' fill='none' stroke='url(#au)' stroke-width='3'/><path d='M40 84 L60 34 L80 84' fill='none' stroke='url(#au)' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/><line x1='49' y1='64' x2='71' y2='64' stroke='url(#au)' stroke-width='8' stroke-linecap='round'/></svg>",
+    djs:[["Celeste","Callirrhoe","velvet-smooth, refined evening host"],["Idris","Orus","worldly, warm baritone, a storyteller of the standards"],["Mira","Vindemiatrix","graceful, cultured, jazz-club whisper"]],
+    imaging:["Aurelia FM — sound with a little soul.","Settle in. You're with Aurelia.","Taste you can hear."] },
+];
+
+// Tuner dial: frequency scale + a marker per station.
+const scale = document.getElementById("scale");
+const dial = document.getElementById("dial");
+const LO = 88, HI = 106;
+for (let f = 88; f <= 106; f += 2){
+  const n = document.createElement("span");
+  n.className = "num"; n.textContent = f.toFixed(0);
+  n.style.left = ((f - LO)/(HI - LO)*100) + "%";
+  scale.appendChild(n);
+}
+STATIONS.forEach((s, i) => {
+  const pos = (parseFloat(s.freq) - LO)/(HI - LO)*100;
+  const a = document.createElement("a");
+  a.className = "marker"; a.href = "#" + s.id;
+  a.style.left = pos + "%"; a.style.setProperty("--mk", s.colors.primary);
+  a.innerHTML = `<span class="cap">${s.name}</span><span class="pin"></span><span class="freq">${s.freq}</span>`;
+  a.style.animationDelay = (0.05 + i*0.04) + "s";
+  dial.appendChild(a);
+});
+
+// Station cards.
+const grid = document.getElementById("grid");
+STATIONS.forEach((s, i) => {
+  const c = s.colors;
+  const el = document.createElement("section");
+  el.className = "card"; el.id = s.id;
+  el.style.cssText = `--pri:${c.primary};--acc:${c.accent};--txt:${c.text};--mut:${c.muted};--srf:${c.surface};--bgc:${c.bg}`;
+  el.style.animationDelay = (0.1 + i*0.06) + "s";
+  const swatches = Object.entries({Primary:c.primary,Accent:c.accent,Surface:c.surface,Base:c.bg,Text:c.text,Muted:c.muted})
+    .map(([k,v]) => `<div class="sw"><i style="background:${v}"></i><span>${v}</span></div>`).join("");
+  const djs = s.djs.map(([n,v,p]) =>
+    `<div class="dj"><span class="av">${n[0]}</span><span class="info"><b>${n}</b><span class="voice">${v}</span><small>${p}</small></span></div>`).join("");
+  const ids = s.imaging.map(line => `<div class="id-line">${line}</div>`).join("");
+  el.innerHTML = `
+    <div class="top">
+      <div class="logo">${s.logo}</div>
+      <div>
+        <h2 class="name">${s.name}</h2>
+        <div class="freqtag">${s.freq} FM</div>
+        <div class="tag">“${s.tagline}”</div>
+      </div>
+    </div>
+    <div class="label">Format</div><div class="format">${s.format}</div>
+    <p class="persona">${s.personality}</p>
+    <div class="label">Palette</div><div class="swatches">${swatches}</div>
+    <div class="label">DJ roster · Gemini voices</div><div class="djs">${djs}</div>
+    <div class="label">On-air station IDs</div><div class="ids">${ids}</div>`;
+  grid.appendChild(el);
+});
+</script>

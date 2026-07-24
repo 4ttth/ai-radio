@@ -1,0 +1,143 @@
+/* Colors are driven by the active branding; JS sets these variables. */
+:root {
+  --bg: #0a0118;
+  --surface: #160b2e;
+  --primary: #00e5ff;
+  --accent: #ff2fd0;
+  --text: #f4eaff;
+  --muted: #8b7bb0;
+  --radius: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: radial-gradient(1200px 800px at 80% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent),
+              radial-gradient(1000px 700px at -10% 110%, color-mix(in srgb, var(--accent) 14%, transparent), transparent),
+              var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background 0.6s ease;
+}
+
+.app { max-width: 1120px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* ── Header ─────────────────────────────────────────── */
+.station-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; margin-bottom: 22px;
+}
+.brand { display: flex; align-items: center; gap: 16px; }
+.brand-logo { width: 68px; height: 68px; flex: 0 0 auto; }
+.brand-logo svg { width: 100%; height: 100%; display: block; }
+.station-name {
+  font-size: 30px; font-weight: 800; letter-spacing: -0.5px;
+  background: transparent; border: none; color: var(--text);
+  border-bottom: 2px dashed transparent; padding: 2px 4px; width: min(60vw, 420px);
+}
+.station-name:focus { outline: none; border-bottom-color: color-mix(in srgb, var(--primary) 60%, transparent); }
+.station-name:hover { border-bottom-color: color-mix(in srgb, var(--muted) 40%, transparent); }
+.tagline { color: var(--muted); font-size: 14px; padding-left: 4px; }
+
+.onair { display: flex; align-items: center; gap: 12px; background: color-mix(in srgb, var(--surface) 70%, transparent);
+  padding: 10px 16px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent); }
+.onair-dot { width: 12px; height: 12px; border-radius: 50%; background: #555; }
+.onair-dot.live { background: #ff3b3b; box-shadow: 0 0 0 0 rgba(255,59,59,0.7); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,59,59,0.6);} 70% { box-shadow: 0 0 0 10px rgba(255,59,59,0);} 100% { box-shadow: 0 0 0 0 rgba(255,59,59,0);} }
+.onair-label { font-size: 10px; letter-spacing: 2px; color: var(--muted); }
+.onair-dj { font-weight: 700; font-size: 15px; }
+
+/* ── Layout ─────────────────────────────────────────── */
+.layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+.card {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, transparent);
+  border-radius: var(--radius); padding: 18px; margin-bottom: 16px;
+  backdrop-filter: blur(6px);
+}
+details.card > summary { cursor: pointer; font-weight: 700; list-style: none; user-select: none; }
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary::before { content: "▸ "; color: var(--primary); }
+details.card[open] > summary::before { content: "▾ "; }
+details.card > *:not(summary) { margin-top: 14px; }
+
+/* ── Now playing ────────────────────────────────────── */
+.now-playing { display: grid; grid-template-columns: 96px 1fr; grid-template-rows: auto auto; gap: 8px 18px; }
+.np-art {
+  grid-row: 1 / span 2; width: 96px; height: 96px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; font-size: 40px;
+  background: linear-gradient(135deg, var(--primary), var(--accent)); color: #0008;
+}
+.np-title { font-size: 22px; font-weight: 800; line-height: 1.15; }
+.np-artist { color: var(--muted); margin-top: 2px; }
+.np-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.tag { font-size: 12px; padding: 3px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--text); }
+.progress { grid-column: 1 / -1; margin-top: 6px; }
+.progress-bar { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 30%, transparent); overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--primary), var(--accent)); transition: width .25s linear; }
+.progress-time { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* ── DJ caption ─────────────────────────────────────── */
+.dj-caption { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.dj-caption-head { font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--accent); }
+.dj-caption p { margin: 10px 0 0; font-size: 16px; line-height: 1.5; font-style: italic; }
+
+/* ── Transport ──────────────────────────────────────── */
+.transport { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.btn {
+  background: color-mix(in srgb, var(--surface) 90%, #fff 4%);
+  color: var(--text); border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  padding: 10px 14px; border-radius: 12px; font-size: 15px; cursor: pointer; transition: transform .08s, background .2s;
+}
+.btn:hover { background: color-mix(in srgb, var(--primary) 18%, var(--surface)); }
+.btn:active { transform: scale(0.96); }
+.btn-sm { padding: 7px 11px; font-size: 13px; }
+.btn-primary { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #06121a; border: none; font-weight: 800; }
+.btn-play { width: 54px; height: 54px; border-radius: 50%; font-size: 20px; }
+.volume { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.volume input { accent-color: var(--primary); }
+
+/* ── Forms ──────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .check { font-size: 13px; color: var(--muted); }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; }
+input, select {
+  background: color-mix(in srgb, var(--bg) 60%, #000 10%); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent); border-radius: 10px;
+  padding: 9px 11px; font-size: 14px; font-family: var(--font);
+}
+input:focus, select:focus { outline: none; border-color: var(--primary); }
+.check { display: flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; }
+.check input { accent-color: var(--primary); }
+.sub, .hint, .lib-stats { font-size: 13px; color: var(--muted); }
+.hint { margin-top: 12px; min-height: 18px; }
+
+/* ── Branding preview / DJ roster ───────────────────── */
+.branding-preview { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.dj-roster { display: flex; flex-direction: column; gap: 8px; }
+.dj-chip { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.dj-chip .avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--primary), var(--accent)); color: #0008; font-weight: 800; font-size: 13px; }
+.dj-chip .who { font-size: 13px; }
+.dj-chip .who b { color: var(--text); }
+.dj-chip .who small { color: var(--muted); }
+
+/* ── Feeds ──────────────────────────────────────────── */
+.feeds { display: flex; flex-direction: column; gap: 8px; }
+.feed { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.feed .feed-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed .feed-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.feed .del { cursor: pointer; color: var(--muted); border: none; background: none; font-size: 16px; }
+.feed-add { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.feed-add input:first-child { grid-column: 1 / -1; }
+
+.status-lines { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.status-lines b { color: var(--text); }

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Radio</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>" />
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- ── Station header ─────────────────────────────── -->
+    <header class="station-header">
+      <div class="brand">
+        <div class="brand-logo" id="brandLogo"></div>
+        <div class="brand-text">
+          <input id="stationName" class="station-name" value="AI Radio" spellcheck="false" aria-label="Station name" />
+          <div class="tagline" id="tagline">Loading…</div>
+        </div>
+      </div>
+      <div class="onair">
+        <span class="onair-dot" id="onairDot"></span>
+        <div>
+          <div class="onair-label">ON AIR</div>
+          <div class="onair-dj" id="onairDj">—</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- ── Player column ────────────────────────────── -->
+      <section class="player-col">
+        <div class="now-playing card">
+          <div class="np-art" id="npArt">♪</div>
+          <div class="np-meta">
+            <div class="np-title" id="npTitle">Nothing playing</div>
+            <div class="np-artist" id="npArtist">Press play to start the station</div>
+            <div class="np-tags" id="npTags"></div>
+          </div>
+          <div class="progress">
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-time"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+          </div>
+        </div>
+
+        <!-- DJ caption: what the AI DJ is saying right now -->
+        <div class="dj-caption card" id="djCaption" hidden>
+          <div class="dj-caption-head"><span class="mic">🎙️</span> <span id="djCaptionName">DJ</span></div>
+          <p id="djCaptionText"></p>
+        </div>
+
+        <!-- Transport -->
+        <div class="transport card">
+          <button id="btnPlay" class="btn btn-primary btn-play" aria-label="Play/Pause">▶</button>
+          <button id="btnSkip" class="btn" aria-label="Skip">⏭</button>
+          <button id="btnTalk" class="btn" title="Have the DJ talk now">🎙️ DJ</button>
+          <button id="btnNews" class="btn" title="Trigger a news break">📰 News</button>
+          <div class="volume">
+            <span>🔊</span>
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.9" />
+          </div>
+        </div>
+
+        <div class="hint" id="statusHint"></div>
+      </section>
+
+      <!-- ── Settings column ──────────────────────────── -->
+      <aside class="settings-col">
+        <details class="card" open>
+          <summary>🎵 Music library</summary>
+          <div class="field">
+            <label for="musicFolder">Music folder (absolute path)</label>
+            <div class="row">
+              <input id="musicFolder" placeholder="/home/you/Music" spellcheck="false" />
+              <button id="btnScan" class="btn btn-sm">Scan</button>
+            </div>
+          </div>
+          <div class="lib-stats" id="libStats">No library scanned yet.</div>
+          <div class="field">
+            <label for="mode">Shuffle mode</label>
+            <select id="mode">
+              <option value="random">Random</option>
+              <option value="bpm-asc">Per beat — BPM ascending</option>
+              <option value="bpm-desc">Per beat — BPM descending</option>
+              <option value="genre">By genre</option>
+              <option value="ai-pick">Let AI pick</option>
+            </select>
+          </div>
+          <div class="field" id="genreField" hidden>
+            <label for="genreFilter">Genre</label>
+            <select id="genreFilter"><option value="">Any</option></select>
+          </div>
+          <div class="field" id="bpmField">
+            <button id="btnAnalyzeBpm" class="btn btn-sm">Analyze BPM of untagged tracks</button>
+            <div class="sub" id="bpmStatus"></div>
+          </div>
+        </details>
+
+        <details class="card">
+          <summary>📻 Station branding</summary>
+          <div class="field">
+            <label for="branding">Preset (station imaging)</label>
+            <select id="branding"></select>
+          </div>
+          <div class="branding-preview" id="brandingPreview"></div>
+          <div class="dj-roster" id="djRoster"></div>
+        </details>
+
+        <details class="card">
+          <summary>🎙️ AI DJ</summary>
+          <div class="field">
+            <label for="introEvery">DJ intro every N songs</label>
+            <input id="introEvery" type="number" min="1" max="10" value="1" />
+          </div>
+          <div class="field">
+            <label for="handoffEvery">DJ handoff every (minutes)</label>
+            <input id="handoffEvery" type="number" min="10" max="240" value="60" />
+          </div>
+          <div class="field">
+            <label for="styleNotes">Extra direction (optional)</label>
+            <input id="styleNotes" placeholder="e.g. keep it chill, mention the weather" />
+          </div>
+          <label class="check"><input type="checkbox" id="talkOver" checked /> Talk over the music (duck)</label>
+        </details>
+
+        <details class="card">
+          <summary>📰 News</summary>
+          <label class="check"><input type="checkbox" id="newsEnabled" checked /> News breaks enabled</label>
+          <div class="field">
+            <label for="newsEvery">News break every (minutes)</label>
+            <input id="newsEvery" type="number" min="5" max="180" value="45" />
+          </div>
+          <div class="field">
+            <label for="newsMax">Stories per break</label>
+            <input id="newsMax" type="number" min="1" max="6" value="3" />
+          </div>
+          <div class="feeds" id="feeds"></div>
+          <div class="feed-add">
+            <input id="feedUrl" placeholder="RSS feed URL" spellcheck="false" />
+            <input id="feedCat" placeholder="Category (e.g. Local)" />
+            <select id="feedMood">
+              <option>Serious</option><option>Upbeat</option><option>Snarky</option><option>Calm</option>
+            </select>
+            <button id="btnAddFeed" class="btn btn-sm">Add feed</button>
+          </div>
+        </details>
+
+        <details class="card">
+          <summary>⚙️ Audio & status</summary>
+          <div class="field">
+            <label for="duck">Duck volume while DJ talks: <span id="duckVal">22%</span></label>
+            <input id="duck" type="range" min="0" max="0.8" step="0.01" value="0.22" />
+          </div>
+          <div class="field">
+            <label for="crossfade">Crossfade seconds: <span id="crossVal">4</span></label>
+            <input id="crossfade" type="range" min="0" max="12" step="1" value="4" />
+          </div>
+          <div class="status-lines" id="statusLines"></div>
+        </details>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/player.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

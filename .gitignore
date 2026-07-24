@@ -1,0 +1,20 @@
+# Secrets — never commit real API keys
+.env
+.env.local
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Runtime / generated
+/data/config.json
+/data/cache/
+*.log
+
+# BPM / metadata analysis sidecar caches
+**/.ai-radio-cache.json
+
+# OS
+.DS_Store
+Thumbs.db

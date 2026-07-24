@@ -1,0 +1,31 @@
+{
+  "name": "ai-radio",
+  "version": "0.1.0",
+  "description": "An AI-powered radio station: streams your local music with AI DJs, smooth talk-over transitions, and RSS news breaks — powered by the Gemini API.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "scan": "node server/scripts/scan.js"
+  },
+  "keywords": [
+    "radio",
+    "ai",
+    "gemini",
+    "tts",
+    "music",
+    "dj"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/static": "^10.1.2",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.2.0",
+    "music-metadata": "^10.4.2",
+    "music-tempo": "^1.0.0",
+    "rss-parser": "^3.13.0"
+  }
+}
