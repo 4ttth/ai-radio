@@ -78,8 +78,8 @@ See **[docs/SETUP.md](docs/SETUP.md)** for getting a Gemini key, installing ffmp
 | Key | Default | Meaning |
 |---|---|---|
 | `GEMINI_API_KEY` | — | Your Gemini key (`AIzaSy…`) |
-| `GEMINI_TEXT_MODEL` | `gemini-2.5-flash` | Model for DJ/news scripts |
-| `GEMINI_TTS_MODEL` | `gemini-2.5-flash-preview-tts` | Model for voices |
+| `GEMINI_TEXT_MODEL` | *(auto)* | Force a text model; blank auto-detects the best your key has |
+| `GEMINI_TTS_MODEL` | *(auto)* | Force a TTS model; blank auto-detects the best your key has |
 | `GEMINI_MAX_RPM` | `8` | Request-per-minute throttle (raise on a paid key) |
 | `MUSIC_FOLDER` | — | Optional default library path |
 | `PORT` / `HOST` | `4123` / `127.0.0.1` | Server bind |

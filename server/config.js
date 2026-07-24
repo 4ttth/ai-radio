@@ -16,8 +16,9 @@ const BRANDING_PATH = path.join(ROOT, 'branding', 'stations.json');
 // ── Environment ───────────────────────────────────────────────
 export const env = {
   geminiKey: process.env.GEMINI_API_KEY || '',
-  textModel: process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash',
-  ttsModel: process.env.GEMINI_TTS_MODEL || 'gemini-2.5-flash-preview-tts',
+  // Blank = auto-detect the best available model for this key (see ai/gemini.js).
+  textModel: process.env.GEMINI_TEXT_MODEL || '',
+  ttsModel: process.env.GEMINI_TTS_MODEL || '',
   maxRpm: Number(process.env.GEMINI_MAX_RPM || 8),
   musicFolder: process.env.MUSIC_FOLDER || '',
   port: Number(process.env.PORT || 4123),

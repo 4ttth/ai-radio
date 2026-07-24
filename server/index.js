@@ -7,6 +7,7 @@ import path from 'node:path';
 import { env, loadConfig, hasGeminiKey } from './config.js';
 import { scan } from './library/scanner.js';
 import { ffmpegAvailable } from './library/bpm.js';
+import { getModels } from './ai/gemini.js';
 import routes from './routes/api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,9 +33,15 @@ async function main() {
 
   const url = `http://${env.host}:${env.port}`;
   const ff = (await ffmpegAvailable()) ? 'yes' : 'no (BPM analysis disabled)';
+  let modelLine = 'n/a (no key)';
+  if (hasGeminiKey()) {
+    const m = await getModels();
+    modelLine = `${m.text} / ${m.tts}${m.discovered ? '' : ' (fallback — model list unavailable)'}`;
+  }
   app.log.info('──────────────────────────────────────────────');
   app.log.info(`  📻  AI Radio is on the air:  ${url}`);
   app.log.info(`  Gemini key:  ${hasGeminiKey() ? 'configured' : 'MISSING — add GEMINI_API_KEY to .env'}`);
+  app.log.info(`  Models:      ${modelLine}`);
   app.log.info(`  ffmpeg:      ${ff}`);
   app.log.info('──────────────────────────────────────────────');
 }

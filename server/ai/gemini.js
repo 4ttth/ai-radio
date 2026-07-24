@@ -67,15 +67,110 @@ async function callModel(model, body, { retries = 2 } = {}) {
   }
 }
 
+// ── Model resolution ──────────────────────────────────────────
+// Models get retired often, so instead of trusting a hardcoded name we ask
+// the key which models it actually has (ListModels) and pick the best. A blank
+// .env means "auto"; an override is honored only if it's real and available.
+const FALLBACK = { text: 'gemini-flash-latest', tts: 'gemini-3.1-flash-tts-preview' };
+// Known-dead IDs we must never use, even if left over in a stale .env.
+const RETIRED = new Set([
+  'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-pro',
+  'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-pro',
+]);
+
+let modelCache = null;
+
+async function listModels() {
+  if (!hasGeminiKey()) return [];
+  try {
+    const res = await fetch(`${BASE}/models?pageSize=1000&key=${encodeURIComponent(env.geminiKey)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.models || []).map((m) => ({
+      id: (m.name || '').replace(/^models\//, ''),
+      methods: m.supportedGenerationMethods || m.supportedActions || [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+const ver = (id) => parseFloat((id.match(/(\d+(?:\.\d+)?)/) || [])[1] || 0);
+
+function scoreText(id) {
+  const n = id.toLowerCase();
+  if (/(embedding|imagen|image|vision|tts|aqa|learnlm|gemma)/.test(n)) return -1;
+  let s = n.includes('latest') ? 5000 : ver(id) * 100;
+  if (n.includes('flash') && !n.includes('lite')) s += 400;
+  else if (n.includes('flash')) s += 250;
+  else if (n.includes('pro')) s += 300;
+  else s -= 100;
+  if (n.includes('preview') || n.includes('exp')) s -= 30;
+  return s;
+}
+
+function scoreTts(id) {
+  const n = id.toLowerCase();
+  if (!n.includes('tts')) return -1;
+  let s = n.includes('latest') ? 5000 : ver(id) * 100;
+  if (n.includes('flash')) s += 200;
+  return s;
+}
+
+function bestBy(list, scorer) {
+  let best = null;
+  let bestScore = 0;
+  for (const m of list) {
+    const sc = scorer(m.id);
+    if (sc > bestScore) { bestScore = sc; best = m.id; }
+  }
+  return best;
+}
+
+function useOverride(override, list) {
+  if (!override) return null;
+  if (RETIRED.has(override)) return null;
+  if (list.length && !list.some((m) => m.id === override)) return null; // not available to this key
+  return override;
+}
+
+export async function getModels(force = false) {
+  if (modelCache && !force) return modelCache;
+  const list = await listModels();
+  const gen = list.filter((m) => !m.methods.length || m.methods.includes('generateContent'));
+  modelCache = {
+    text: useOverride(env.textModel, list) || bestBy(gen, scoreText) || FALLBACK.text,
+    tts: useOverride(env.ttsModel, list) || bestBy(list, scoreTts) || FALLBACK.tts,
+    discovered: list.length > 0,
+    available: list.map((m) => m.id),
+  };
+  return modelCache;
+}
+
+// Run `fn(model)` with the resolved model for `kind`; if it 404s (retired/
+// unknown), re-discover once and retry with a fresh pick.
+async function withModel(kind, fn) {
+  const models = await getModels();
+  try {
+    return await fn(models[kind]);
+  } catch (e) {
+    if (e && e.status === 404) {
+      const fresh = await getModels(true);
+      if (fresh[kind] && fresh[kind] !== models[kind]) return fn(fresh[kind]);
+    }
+    throw e;
+  }
+}
+
 // ── Text generation ───────────────────────────────────────────
 export async function generateText(prompt, { temperature = 0.9, maxOutputTokens = 512, json = false } = {}) {
   const generationConfig = { temperature, maxOutputTokens };
   if (json) generationConfig.responseMimeType = 'application/json';
 
-  const data = await callModel(env.textModel, {
+  const data = await withModel('text', (model) => callModel(model, {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig,
-  });
+  }));
 
   const parts = data?.candidates?.[0]?.content?.parts || [];
   const out = parts.map((p) => p.text || '').join('').trim();
@@ -97,7 +192,7 @@ export async function generateJson(prompt, opts = {}) {
 // ── Text-to-speech ────────────────────────────────────────────
 // Returns a Buffer containing a playable WAV file.
 export async function synthesizeSpeech(text, { voiceName = 'Kore' } = {}) {
-  const data = await callModel(env.ttsModel, {
+  const data = await withModel('tts', (model) => callModel(model, {
     contents: [{ role: 'user', parts: [{ text }] }],
     generationConfig: {
       responseModalities: ['AUDIO'],
@@ -105,7 +200,7 @@ export async function synthesizeSpeech(text, { voiceName = 'Kore' } = {}) {
         voiceConfig: { prebuiltVoiceConfig: { voiceName } },
       },
     },
-  });
+  }));
 
   const inline = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)?.inlineData;
   if (!inline?.data) {

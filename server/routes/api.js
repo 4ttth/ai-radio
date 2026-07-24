@@ -12,6 +12,7 @@ import { pickNext, listGenres } from '../sequencer/sequencer.js';
 import { introScript, handoffScript, welcomeScript, djForHour } from '../ai/dj.js';
 import { fetchNews, newsScript } from '../ai/news.js';
 import { renderVoice, readCached } from '../director/segments.js';
+import { getModels } from '../ai/gemini.js';
 
 let bpmProgress = { running: false, analyzed: 0, total: 0, done: false };
 
@@ -31,9 +32,10 @@ async function buildState() {
   const branding = await getBranding(config.brandingId);
   const roster = await getDjRoster();
   const tracks = getTracks();
+  const models = await getModels();
   return {
     hasKey: hasGeminiKey(),
-    models: { text: env.textModel, tts: env.ttsModel },
+    models: { text: models.text, tts: models.tts, discovered: models.discovered },
     config,
     branding,
     djRoster: roster,
@@ -53,6 +55,9 @@ export default async function routes(app) {
   app.get('/api/state', async () => buildState());
 
   app.get('/api/branding', async () => ({ stations: await loadBranding() }));
+
+  // Which models the key actually has, and which we auto-picked (?refresh=1 to re-check).
+  app.get('/api/models', async (req) => getModels(req.query.refresh === '1'));
 
   // Update config; rescan if the music folder changed.
   app.post('/api/config', async (req) => {
