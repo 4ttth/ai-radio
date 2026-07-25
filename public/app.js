@@ -122,6 +122,7 @@ function hydrate() {
   $('styleNotes').value = cfg.dj?.styleNotes || '';
   $('voiceEngine').value = cfg.voiceEngine || 'tts';
   updateVoiceEngineHint();
+  if (cfg.voiceEngine === 'kokoro' && state.kokoro?.status !== 'ready') pollKokoro();
   $('talkOver').checked = cfg.talkOverMusic !== false;
 
   // News
@@ -159,16 +160,38 @@ function toggleGenreField() {
 function updateVoiceEngineHint() {
   const eng = $('voiceEngine').value;
   const m = state.models || {};
-  $('voiceEngineHint').textContent = eng === 'native'
-    ? `Live API model ${m.native || 'native-audio'}. More natural, different quota; auto-falls back to TTS if a session fails.`
-    : `Dedicated TTS model ${m.tts || ''}. Best for reading scripts/news exactly.`;
+  const k = state.kokoro || {};
+  let msg;
+  if (eng === 'native') {
+    msg = `Live API model ${m.native || 'native-audio'}. More natural, different quota; auto-falls back to TTS if a session fails.`;
+  } else if (eng === 'kokoro') {
+    const load = k.status === 'loading' ? ` — downloading/loading model ${k.progress || 0}%…`
+      : k.status === 'ready' ? ' — model ready ✓'
+      : k.status === 'error' ? ` — load failed: ${k.error || ''}` : '';
+    msg = `Runs 100% locally on CPU. Free, offline, no rate limits. First use downloads ~80MB.${load}`;
+  } else {
+    msg = `Dedicated TTS model ${m.tts || ''}. Best for reading scripts/news exactly.`;
+  }
+  $('voiceEngineHint').textContent = msg;
+}
+
+async function pollKokoro() {
+  const s = await api.state();
+  state.kokoro = s.kokoro;
+  updateVoiceEngineHint();
+  renderStatus();
+  if (s.kokoro && s.kokoro.status === 'loading') setTimeout(pollKokoro, 1500);
 }
 
 function renderStatus() {
   const l = state.library;
+  const eng = state.config.voiceEngine;
+  const engLabel = eng === 'native' ? 'native audio (Live API)' : eng === 'kokoro' ? 'local Kokoro (CPU)' : 'Gemini TTS';
+  const k = state.kokoro || {};
   $('statusLines').innerHTML = `
     Gemini key: <b>${state.hasKey ? 'configured ✓' : 'missing ✗'}</b><br>
-    Voice engine: <b>${state.config.voiceEngine === 'native' ? 'native audio (Live API)' : 'TTS'}</b><br>
+    Voice engine: <b>${engLabel}</b><br>
+    ${eng === 'kokoro' ? `Local model: <b>${k.status || 'idle'}${k.status === 'loading' ? ' ' + (k.progress || 0) + '%' : ''}</b><br>` : ''}
     Models: text <b>${state.models.text}</b> · tts <b>${state.models.tts}</b> · native <b>${state.models.native || '—'}</b><br>
     Library folder: <b>${l.folder || '(none)'}</b><br>
     ffmpeg (BPM analysis): <b>${l.ffmpeg ? 'available' : 'not installed'}</b>`;
@@ -273,6 +296,7 @@ async function prefetch() {
       }
       const seg = await api.segment(body);
       if (!seg.skip) segment = { ...seg, type };
+      else if (seg.reason === 'kokoro-loading') hint('Local voice model still loading — DJ starts once it\'s ready.');
       else if (seg.rateLimited) hint('Gemini rate-limited — skipping this DJ break. It will retry later.');
     }
     pending = { track, segment };
@@ -340,7 +364,12 @@ async function talkNow(type) {
   hint('Generating…');
   const seg = await api.segment(body);
   hint('');
-  if (seg.skip) { hint(`No segment: ${seg.reason}${seg.rateLimited ? ' (rate-limited)' : ''}`); return; }
+  if (seg.skip) {
+    hint(seg.reason === 'kokoro-loading'
+      ? 'Local voice model is still loading — try again in a moment.'
+      : `No segment: ${seg.reason}${seg.rateLimited ? ' (rate-limited)' : ''}`);
+    return;
+  }
   showCaption(seg);
   await player.playVoice(seg.audioUrl);
   hideCaptionSoon();
@@ -390,7 +419,11 @@ function wire() {
   $('introEvery').onchange = (e) => saveConfig({ dj: { introEverySongs: Number(e.target.value) } });
   $('handoffEvery').onchange = (e) => saveConfig({ dj: { handoffEveryMinutes: Number(e.target.value) } });
   $('styleNotes').onchange = (e) => saveConfig({ dj: { styleNotes: e.target.value } });
-  $('voiceEngine').onchange = (e) => { saveConfig({ voiceEngine: e.target.value }, true); updateVoiceEngineHint(); };
+  $('voiceEngine').onchange = async (e) => {
+    saveConfig({ voiceEngine: e.target.value }, true);
+    updateVoiceEngineHint();
+    if (e.target.value === 'kokoro') { await fetch('/api/kokoro/preload', { method: 'POST' }); pollKokoro(); }
+  };
   $('talkOver').onchange = (e) => saveConfig({ talkOverMusic: e.target.checked });
 
   $('newsEnabled').onchange = (e) => saveConfig({ news: { enabled: e.target.checked } });

@@ -10,6 +10,8 @@ yarn-error.log*
 # Runtime / generated
 /data/config.json
 /data/cache/
+/data/models/
+.cache/
 *.log
 
 # BPM / metadata analysis sidecar caches

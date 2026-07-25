@@ -81,6 +81,10 @@ See **[docs/SETUP.md](docs/SETUP.md)** for getting a Gemini key, installing ffmp
 | `GEMINI_TEXT_MODEL` | *(auto)* | Force a text model; blank auto-detects the best your key has |
 | `GEMINI_TTS_MODEL` | *(auto)* | Force a TTS model; blank auto-detects the best your key has |
 | `GEMINI_NATIVE_MODEL` | *(auto)* | Force the native-audio (Live API) model; used only when Voice engine = Native |
+| `KOKORO_MODEL` | `onnx-community/Kokoro-82M-v1.0-ONNX` | Local TTS model (used when Voice engine = Local) |
+| `KOKORO_DTYPE` | `q8` | Local model precision: `fp32` / `fp16` / `q8` / `q4` / `q4f16` |
+| `KOKORO_DEVICE` | `cpu` | `cpu` (Node) or `webgpu` |
+| `KOKORO_DEFAULT_VOICE` | `af_heart` | Fallback Kokoro voice if a DJ's voice is unset/invalid |
 | `GEMINI_MAX_RPM` | `8` | Request-per-minute throttle (raise on a paid key) |
 | `MUSIC_FOLDER` | — | Optional default library path |
 | `PORT` / `HOST` | `4123` / `127.0.0.1` | Server bind |
@@ -91,10 +95,11 @@ Everything else (station name, branding, shuffle mode, DJ cadence, feeds, duck l
 
 Under **AI DJ → Voice engine** you can pick how DJ/news audio is produced:
 
-- **TTS model** (default) — the dedicated Gemini TTS model over a simple REST call. Reads scripts and news *verbatim*, is cheap, and caches perfectly. Best for a radio station. Free-tier requests/minute are limited, which is why segments are pre-generated and cached.
-- **Native audio (Live API)** — a native-audio model over a WebSocket (`BidiGenerateContent`). More expressive/natural and uses a different quota model (sessions rather than strict RPM), but it's conversational by design, so it's pinned with a system instruction to read text verbatim. **Experimental.** If a live session fails for any reason, it automatically falls back to the TTS model so the radio never goes silent.
+- **Gemini TTS** (default) — the dedicated Gemini TTS model over a simple REST call. Reads scripts and news *verbatim*, is cheap, and caches perfectly. Best for a radio station. Free-tier requests/minute are limited, which is why segments are pre-generated and cached.
+- **Gemini native audio (Live API)** — a native-audio model over a WebSocket (`BidiGenerateContent`). More expressive/natural and uses a different quota model (sessions rather than strict RPM), but it's conversational by design, so it's pinned with a system instruction to read text verbatim. **Experimental.** If a live session fails for any reason, it automatically falls back to the TTS model so the radio never goes silent.
+- **Local · Kokoro TTS** — the open-source [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model running **100% locally on CPU** inside the Node server (via `kokoro-js`), in a worker thread so synthesis never stutters playback. **Free, offline, and rate-limit-free.** On first use it downloads ~80 MB of model files into `data/models/` (you'll see a load-progress indicator; DJ breaks are skipped until it's ready). Each DJ maps to a fitting Kokoro voice (`af_heart`, `am_puck`, `bm_george`, …), editable per DJ in `branding/stations.json`. *Note:* DJ/news **scripts** are still written by Gemini text — Kokoro only replaces the voice, which is where the free-tier limits were tightest.
 
-Both cache identical clips to disk, so switching engines re-uses nothing between them but never re-synthesizes the same line twice within an engine.
+All three cache clips to disk, keyed by engine + voice + text, so the same line is never synthesized twice within an engine.
 
 ---
 
@@ -106,6 +111,8 @@ server/
   config.js           env + persisted station config + branding catalogue
   ai/gemini.js        Gemini client: text, TTS, model auto-detect, throttle, PCM→WAV
   ai/liveVoice.js     Native-audio (Live API) voice engine over WebSocket (optional)
+  ai/kokoroVoice.js   Local Kokoro TTS manager: worker lifecycle + load status
+  ai/kokoroWorker.js  Worker thread running Kokoro on CPU (kokoro-js/ONNX)
   ai/dj.js            DJ persona scripts (intro / handoff / welcome)
   ai/news.js          RSS fetch + spoken news bulletin
   library/scanner.js  folder scan, tags, filename fallback

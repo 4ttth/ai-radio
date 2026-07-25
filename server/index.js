@@ -41,7 +41,9 @@ async function main() {
   app.log.info('──────────────────────────────────────────────');
   app.log.info(`  📻  AI Radio is on the air:  ${url}`);
   app.log.info(`  Gemini key:  ${hasGeminiKey() ? 'configured' : 'MISSING — add GEMINI_API_KEY to .env'}`);
-  app.log.info(`  Voice:       ${cfg.voiceEngine === 'native' ? 'native audio (Live API)' : 'TTS'}`);
+  const voiceLabel = cfg.voiceEngine === 'native' ? 'native audio (Live API)'
+    : cfg.voiceEngine === 'kokoro' ? `local Kokoro (${env.kokoroDtype}, CPU)` : 'Gemini TTS';
+  app.log.info(`  Voice:       ${voiceLabel}`);
   app.log.info(`  Models:      ${modelLine}`);
   app.log.info(`  ffmpeg:      ${ff}`);
   app.log.info('──────────────────────────────────────────────');

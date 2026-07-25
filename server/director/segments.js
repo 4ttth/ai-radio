@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { synthesizeSpeech } from '../ai/gemini.js';
 import { synthesizeSpeechNative } from '../ai/liveVoice.js';
+import { synthesizeKokoro, kokoroStatus, preloadKokoro } from '../ai/kokoroVoice.js';
 import { CACHE_DIR } from '../config.js';
 
 const hash = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 16);
@@ -20,7 +21,17 @@ export async function renderVoice(script, voiceName, { engine = 'tts' } = {}) {
   if (existsSync(file)) return { id, audioUrl: `/api/audio/${id}`, engineUsed: `${engine} (cached)` };
 
   let wav;
-  if (engine === 'native') {
+  if (engine === 'kokoro') {
+    // Local model: if it isn't loaded yet, start loading and skip this break
+    // (the music keeps playing) rather than blocking on a first-run download.
+    if (kokoroStatus().status !== 'ready') {
+      preloadKokoro();
+      const e = new Error('local voice model is still loading');
+      e.reason = 'kokoro-loading';
+      throw e;
+    }
+    wav = await synthesizeKokoro(script, voiceName);
+  } else if (engine === 'native') {
     try {
       wav = await synthesizeSpeechNative(script, { voiceName });
     } catch (err) {

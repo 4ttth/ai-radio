@@ -13,6 +13,7 @@ import { introScript, handoffScript, welcomeScript, djForHour } from '../ai/dj.j
 import { fetchNews, newsScript } from '../ai/news.js';
 import { renderVoice, readCached } from '../director/segments.js';
 import { getModels } from '../ai/gemini.js';
+import { kokoroStatus, preloadKokoro } from '../ai/kokoroVoice.js';
 
 let bpmProgress = { running: false, analyzed: 0, total: 0, done: false };
 
@@ -36,6 +37,7 @@ async function buildState() {
   return {
     hasKey: hasGeminiKey(),
     models: { text: models.text, tts: models.tts, native: models.native, discovered: models.discovered },
+    kokoro: kokoroStatus(),
     config,
     branding,
     djRoster: roster,
@@ -67,8 +69,13 @@ export default async function routes(app) {
     if (patch.musicFolder && patch.musicFolder !== before.musicFolder) {
       await scan(cfg.musicFolder);
     }
+    // Start loading the local model as soon as the user selects it.
+    if (patch.voiceEngine === 'kokoro') preloadKokoro();
     return buildState();
   });
+
+  // Begin loading the local Kokoro model (returns current load status).
+  app.post('/api/kokoro/preload', async () => preloadKokoro());
 
   // Scan (or rescan) the music folder.
   app.post('/api/scan', async (req) => {
@@ -167,8 +174,10 @@ export default async function routes(app) {
       }
 
       if (!result || !result.text) return { skip: true, reason: 'empty' };
-      const voice = result.dj?.voice || 'Kore';
-      const engine = cfg.voiceEngine === 'native' ? 'native' : 'tts';
+      const engine = ['native', 'kokoro'].includes(cfg.voiceEngine) ? cfg.voiceEngine : 'tts';
+      const voice = engine === 'kokoro'
+        ? (result.dj?.kokoroVoice || 'af_heart')
+        : (result.dj?.voice || 'Kore');
       const t0 = Date.now();
       const audio = await renderVoice(result.text, voice, { engine });
       req.log.info(`segment(${type}) voice=${voice} engine=${audio.engineUsed} chars=${result.text.length} ms=${Date.now() - t0}`);
@@ -180,9 +189,11 @@ export default async function routes(app) {
         audioUrl: audio.audioUrl,
       };
     } catch (err) {
+      // Local model still downloading/loading — expected, not an error.
+      if (err.reason === 'kokoro-loading') return { skip: true, reason: 'kokoro-loading' };
       req.log.warn(`segment(${type}) failed: ${err.message}`);
       // Never let an AI hiccup stop the music — the client just skips the talk.
-      return { skip: true, reason: 'error', message: err.message, rateLimited: err.rateLimited || false };
+      return { skip: true, reason: err.reason || 'error', message: err.message, rateLimited: err.rateLimited || false };
     }
   });
 }

@@ -10,6 +10,7 @@ export const ROOT = path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(ROOT, 'data');
 export const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 export const CACHE_DIR = path.join(DATA_DIR, 'cache');
+export const MODELS_DIR = path.join(DATA_DIR, 'models'); // local TTS model cache (Kokoro)
 const DEFAULT_CONFIG_PATH = path.join(ROOT, 'config', 'station.default.json');
 const BRANDING_PATH = path.join(ROOT, 'branding', 'stations.json');
 
@@ -20,6 +21,11 @@ export const env = {
   textModel: process.env.GEMINI_TEXT_MODEL || '',
   ttsModel: process.env.GEMINI_TTS_MODEL || '',
   nativeModel: process.env.GEMINI_NATIVE_MODEL || '', // Live API native-audio voice engine
+  // Local, offline Kokoro TTS (runs in-process on CPU; no API key needed).
+  kokoroModel: process.env.KOKORO_MODEL || 'onnx-community/Kokoro-82M-v1.0-ONNX',
+  kokoroDtype: process.env.KOKORO_DTYPE || 'q8',
+  kokoroDevice: process.env.KOKORO_DEVICE || 'cpu',
+  kokoroVoice: process.env.KOKORO_DEFAULT_VOICE || 'af_heart',
   maxRpm: Number(process.env.GEMINI_MAX_RPM) || 8,
   musicFolder: process.env.MUSIC_FOLDER || '',
   port: Number(process.env.PORT || 4123),
