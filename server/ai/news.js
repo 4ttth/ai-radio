@@ -2,6 +2,7 @@
 // read in the current DJ's voice with the mood the user tagged each feed.
 import Parser from 'rss-parser';
 import { generateText } from './gemini.js';
+import { cleanScript } from './clean.js';
 
 const parser = new Parser({ timeout: 10000 });
 const seen = new Set(); // links we've already read on air, to avoid repeats
@@ -48,27 +49,27 @@ export async function newsScript({ branding, dj, items, defaultMood = 'Serious' 
   };
 
   const itemLines = items
-    .map((it, i) => `${i + 1}. [${it.category} · read it ${it.mood.toLowerCase()}] ${it.title}${it.summary ? ` — ${it.summary}` : ''}`)
+    .map((it) => `- (${it.category}, read ${it.mood.toLowerCase()}) ${it.title}${it.summary ? ` — ${it.summary}` : ''}`)
     .join('\n');
 
   const overallMood = items[0]?.mood || defaultMood;
 
   const prompt = `${branding.vibePrompt}
-You are ${dj?.name || 'the host'} on ${branding.name}. Right now you're doing a short news break.
+You are ${dj?.name || 'the host'} on ${branding.name}, doing a short on-air news break.
 
-Deliver, as spoken words only:
-1. A brief, natural segue from the music into the news (one line).
-2. Read these ${items.length} stories in your own words — concise, one to two sentences each. Read each in the tone tagged in brackets (${Object.entries(moodDirections).map(([k, v]) => `${k} = ${v}`).join('; ')}).
-3. A quick line handing back to the music.
+Write it as ONE continuous piece of spoken radio copy: open with a quick, natural segue from the music into the news, then deliver these ${items.length} stories in your own words — one or two sentences each — and finish by handing back to the music in a single line. It must sound like one person talking on air, start to finish.
+
+Read each story in the tone noted next to it (${Object.entries(moodDirections).map(([k, v]) => `${k} = ${v}`).join('; ')}).
 
 Stories:
 ${itemLines}
 
 Rules:
-- Output ONLY the words to be spoken aloud. No headings, no numbering, no stage directions, no emoji.
-- Keep the whole break under about 150 words.
+- Output ONLY the words to be spoken aloud, as flowing speech.
+- Do NOT include any labels or headings (no "Segue:", "Story 1:", "Back-announce:"), no numbering, no markdown, no asterisks, no brackets, no emoji.
+- Keep the whole break under about 140 words, and always finish your final sentence.
 - Overall tone leans ${overallMood.toLowerCase()}. Stay factual; don't invent details beyond what's given.`;
 
-  const text = await generateText(prompt, { temperature: 0.8, maxOutputTokens: 380 });
-  return { text: (text || '').replace(/\s+/g, ' ').trim(), dj, items };
+  const text = await generateText(prompt, { temperature: 0.8, maxOutputTokens: 900 });
+  return { text: cleanScript(text), dj, items };
 }

@@ -1,7 +1,7 @@
 // Worker thread: loads Kokoro TTS once and synthesizes speech off the main
 // event loop, so CPU inference never stutters music streaming or the API.
 import { parentPort, workerData } from 'node:worker_threads';
-import { env as tenv } from '@huggingface/transformers';
+import { env as tenv, RawAudio } from '@huggingface/transformers';
 import { KokoroTTS } from 'kokoro-js';
 
 // Keep the (~80MB) model files under the app's data/ dir instead of a global cache.
@@ -33,8 +33,24 @@ parentPort.on('message', async (msg) => {
   const voice = voiceSet.has(msg.voice) ? msg.voice : workerData.defaultVoice;
   try {
     if (!tts) throw new Error('model not loaded yet');
-    const audio = await tts.generate(text, { voice });
-    const wav = audio.toWav(); // ArrayBuffer of a 24kHz WAV
+    // Stream sentence-by-sentence and concatenate. Single-shot generate()
+    // tokenizes with truncation, so long scripts get cut off; streaming splits
+    // the text first and never truncates.
+    const chunks = [];
+    let rate = 24000;
+    for await (const part of tts.stream(text, { voice })) {
+      if (part.audio && part.audio.audio && part.audio.audio.length) {
+        chunks.push(part.audio.audio);
+        rate = part.audio.sampling_rate || rate;
+      }
+    }
+    if (!chunks.length) throw new Error('no audio produced');
+    let total = 0;
+    for (const c of chunks) total += c.length;
+    const merged = new Float32Array(total);
+    let off = 0;
+    for (const c of chunks) { merged.set(c, off); off += c.length; }
+    const wav = new RawAudio(merged, rate).toWav(); // ArrayBuffer of a 24kHz WAV
     parentPort.postMessage({ type: 'result', id, wav }, [wav]); // transfer, no copy
   } catch (e) {
     parentPort.postMessage({ type: 'error', id, error: String((e && e.message) || e) });

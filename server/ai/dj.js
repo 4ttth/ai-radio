@@ -1,6 +1,7 @@
 // Generates the spoken scripts an AI DJ says on air.
 // Every script is spoken words ONLY (no stage directions) so TTS reads it cleanly.
 import { generateText } from './gemini.js';
+import { cleanScript } from './clean.js';
 
 // Which DJ is on air for a given hour — rotates through the roster.
 export function djForHour(roster, date = new Date()) {
@@ -18,9 +19,11 @@ function songLine(t) {
 }
 
 const rules = `Rules:
-- Output ONLY the words to be spoken aloud. No stage directions, no asterisks, no emoji, no quotation marks around the whole thing.
+- Output ONLY the words to be spoken aloud, as one flowing piece of speech.
+- Do NOT include any labels or headings (like "Segue:", "Intro:", "Transition:"), no numbering, no markdown, no asterisks, no emoji, and no stage directions in brackets or parentheses.
+- Do not wrap the whole thing in quotation marks.
 - Sound like a real radio DJ talking over the mix. Natural, in the moment.
-- Keep it tight: 2 to 4 sentences. This plays over the music, so no rambling.`;
+- Keep it tight: 2 to 4 sentences. Finish your last sentence — never trail off mid-thought.`;
 
 function personaBlock(branding, dj) {
   const phrases = dj?.catchphrases?.length ? `Signature phrases you sometimes use: ${dj.catchphrases.join(' / ')}.` : '';
@@ -37,8 +40,8 @@ Coming up next: ${songLine(next)}.
 
 Give a short on-air transition that leads into the next song. Mention the next song's title and artist, and evoke its feel or mood in a vivid word or two. ${current ? 'You may briefly nod to the track that just played.' : ''} ${styleNotes ? `Extra direction: ${styleNotes}.` : ''}
 ${rules}`;
-  const text = await generateText(prompt, { temperature: 1.0, maxOutputTokens: 220 });
-  return { text: clean(text), dj };
+  const text = await generateText(prompt, { temperature: 1.0, maxOutputTokens: 400 });
+  return { text: cleanScript(text), dj };
 }
 
 // Top-of-hour handoff: outgoing DJ signs off, welcomes the incoming DJ.
@@ -50,8 +53,8 @@ ${next ? `Right after the handoff, the next song is ${songLine(next)}.` : ''}
 
 Give a warm, natural sign-off that names yourself, thanks the listeners, and welcomes ${incoming?.name || 'the next DJ'} to the mic. Something in the spirit of "that's it for me folks, I'm ${outgoing?.name}, now let's welcome ${incoming?.name}."
 ${rules}`;
-  const text = await generateText(prompt, { temperature: 1.0, maxOutputTokens: 200 });
-  return { text: clean(text), dj: outgoing };
+  const text = await generateText(prompt, { temperature: 1.0, maxOutputTokens: 350 });
+  return { text: cleanScript(text), dj: outgoing };
 }
 
 // A short welcome from the incoming DJ (optional, played after a handoff).
@@ -60,14 +63,6 @@ export async function welcomeScript({ branding, dj, next }) {
 
 You've just taken over the mic. Give a brief, energetic hello that fits your personality${next ? `, then tease the next song: ${songLine(next)}` : ''}.
 ${rules}`;
-  const text = await generateText(prompt, { temperature: 1.0, maxOutputTokens: 160 });
-  return { text: clean(text), dj };
-}
-
-function clean(text) {
-  return (text || '')
-    .replace(/\*[^*]*\*/g, '') // strip *stage directions*
-    .replace(/^["']|["']$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const text = await generateText(prompt, { temperature: 1.0, maxOutputTokens: 300 });
+  return { text: cleanScript(text), dj };
 }
