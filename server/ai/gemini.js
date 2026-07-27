@@ -195,34 +195,21 @@ async function withModel(kind, fn) {
 }
 
 // ── Text generation ───────────────────────────────────────────
-let noThinking = false; // set true if the text model rejects thinkingConfig
-
 export async function generateText(prompt, { temperature = 0.9, maxOutputTokens = 512, json = false } = {}) {
-  const base = { temperature, maxOutputTokens };
-  if (json) base.responseMimeType = 'application/json';
-  const run = (cfg) => withModel('text', (model) => callModel(model, {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: cfg,
-  }, { timeout: 30000 }));
+  const generationConfig = { temperature, maxOutputTokens };
+  if (json) generationConfig.responseMimeType = 'application/json';
 
-  let data;
-  try {
-    // Disable "thinking" so reasoning tokens don't consume the output budget
-    // and truncate the script. Some models reject it — fall back if so.
-    data = await run(noThinking ? base : { ...base, thinkingConfig: { thinkingBudget: 0 } });
-  } catch (e) {
-    if (!noThinking && e.status === 400 && /think/i.test(e.message || '')) {
-      noThinking = true;
-      data = await run(base);
-    } else {
-      throw e;
-    }
-  }
+  const data = await withModel('text', (model) => callModel(model, {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig,
+  }, { timeout: 30000 }));
 
   const cand = data?.candidates?.[0];
   const out = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  // Models "think" by default and those tokens share the output budget; if we
+  // hit the ceiling the script would be truncated, so surface it.
   if (cand?.finishReason === 'MAX_TOKENS') {
-    console.warn(`[gemini] text hit MAX_TOKENS (maxOutputTokens=${maxOutputTokens}); output may be truncated.`);
+    console.warn(`[gemini] text hit MAX_TOKENS (maxOutputTokens=${maxOutputTokens}); raise it if scripts cut off.`);
   }
   return out;
 }

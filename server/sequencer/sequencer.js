@@ -65,7 +65,7 @@ ${list}
 Respond with JSON only: {"id":"<candidate id>","reason":"<short reason>"}`;
 
   try {
-    const out = await generateJson(prompt, { temperature: 0.8, maxOutputTokens: 300 });
+    const out = await generateJson(prompt, { temperature: 0.8, maxOutputTokens: 600 });
     const chosen = candidates.find((t) => t.id === out.id);
     return chosen || rand(candidates);
   } catch {
