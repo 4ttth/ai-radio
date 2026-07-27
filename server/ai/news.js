@@ -70,6 +70,6 @@ Rules:
 - Keep the whole break under about 140 words, and always finish your final sentence.
 - Overall tone leans ${overallMood.toLowerCase()}. Stay factual; don't invent details beyond what's given.`;
 
-  const text = await generateText(prompt, { temperature: 0.8, maxOutputTokens: 2000 });
+  const text = await generateText(prompt, { temperature: 0.8, maxOutputTokens: 8192 });
   return { text: cleanScript(text), dj, items };
 }
