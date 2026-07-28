@@ -122,7 +122,7 @@ function hydrate() {
   $('styleNotes').value = cfg.dj?.styleNotes || '';
   $('voiceEngine').value = cfg.voiceEngine || 'tts';
   updateVoiceEngineHint();
-  if (cfg.voiceEngine === 'kokoro' && state.kokoro?.status !== 'ready') pollKokoro();
+  if (state.voiceEngine === 'kokoro' && state.kokoro?.status !== 'ready') pollKokoro();
   $('talkOver').checked = cfg.talkOverMusic !== false;
 
   // News
@@ -158,7 +158,10 @@ function toggleGenreField() {
 }
 
 function updateVoiceEngineHint() {
-  const eng = $('voiceEngine').value;
+  const picked = $('voiceEngine').value;
+  // Gemini engines need a key; without one the server uses Kokoro regardless.
+  const eng = picked !== 'kokoro' && !state.hasKey ? 'kokoro' : picked;
+  const overridden = eng !== picked;
   const m = state.models || {};
   const k = state.kokoro || {};
   let msg;
@@ -169,33 +172,60 @@ function updateVoiceEngineHint() {
       : k.status === 'ready' ? ' — model ready ✓'
       : k.status === 'error' ? ` — load failed: ${k.error || ''}` : '';
     msg = `Runs 100% locally on CPU. Free, offline, no rate limits. First use downloads ~80MB.${load}`;
+    if (overridden) msg = `No Gemini key, so the local engine is used instead. ${msg}`;
   } else {
     msg = `Dedicated TTS model ${m.tts || ''}. Best for reading scripts/news exactly.`;
   }
   $('voiceEngineHint').textContent = msg;
 }
 
-async function pollKokoro() {
+let kokoroPollTimer = null;
+async function pollKokoro(idleTicksLeft = 4) {
+  clearTimeout(kokoroPollTimer);
   const s = await api.state();
   state.kokoro = s.kokoro;
+  state.voiceEngine = s.voiceEngine;
+  state.text = s.text;
   updateVoiceEngineHint();
   renderStatus();
-  if (s.kokoro && s.kokoro.status === 'loading') setTimeout(pollKokoro, 1500);
+  // Keep watching while it downloads/loads. "idle" means the worker hasn't
+  // started yet — give that a few ticks before giving up on the poll.
+  const st = s.kokoro?.status;
+  if (st === 'loading') kokoroPollTimer = setTimeout(() => pollKokoro(), 1500);
+  else if (st === 'idle' && idleTicksLeft > 0) kokoroPollTimer = setTimeout(() => pollKokoro(idleTicksLeft - 1), 1500);
 }
 
 function renderStatus() {
   const l = state.library;
-  const eng = state.config.voiceEngine;
+  const txt = state.text || {};
+  const eng = state.voiceEngine || state.config.voiceEngine;
   const engLabel = eng === 'native' ? 'native audio (Live API)' : eng === 'kokoro' ? 'local Kokoro (CPU)' : 'Gemini TTS';
   const k = state.kokoro || {};
+  const kLabel = k.status === 'loading' ? `loading ${k.progress || 0}%`
+    : k.status === 'error' ? `failed ✗ — ${k.error || 'unknown error'}`
+      : k.status === 'ready' ? 'ready ✓' : (k.status || 'idle');
+  let ollamaLine = '';
+  if (txt.ollama) {
+    ollamaLine = txt.ollama.reachable
+      ? `Ollama: <b>${txt.ollama.model} ✓</b>${txt.ollama.modelInstalled === false ? ` <b>— not pulled (ollama pull ${txt.ollama.model})</b>` : ''}<br>`
+      : `Ollama: <b>${txt.ollama.url} — unreachable ✗</b><br>`;
+  }
   $('statusLines').innerHTML = `
-    Gemini key: <b>${state.hasKey ? 'configured ✓' : 'missing ✗'}</b><br>
+    Scripts: <b>${txt.label || 'none'}</b><br>
+    ${ollamaLine}
+    Gemini key: <b>${state.hasKey ? 'configured ✓' : 'not set'}</b><br>
     Voice engine: <b>${engLabel}</b><br>
-    ${eng === 'kokoro' ? `Local model: <b>${k.status || 'idle'}${k.status === 'loading' ? ' ' + (k.progress || 0) + '%' : ''}</b><br>` : ''}
+    ${eng === 'kokoro' ? `Local voice model: <b>${kLabel}</b><br>` : ''}
     Models: text <b>${state.models.text}</b> · tts <b>${state.models.tts}</b> · native <b>${state.models.native || '—'}</b><br>
     Library folder: <b>${l.folder || '(none)'}</b><br>
     ffmpeg (BPM analysis): <b>${l.ffmpeg ? 'available' : 'not installed'}</b>`;
-  if (!state.hasKey) hint('⚠️ No Gemini key — the station plays music, but DJs & news are silent until you add GEMINI_API_KEY to .env and restart.');
+  if (!txt.provider) {
+    hint('⚠️ No text backend — the station plays music, but DJs & news stay silent until you set OLLAMA_URL or GEMINI_API_KEY in .env and restart.');
+  } else if (txt.ollama && txt.ollama.reachable === false) {
+    hint(`⚠️ Ollama at ${txt.ollama.url} is unreachable — start it with "ollama serve".`);
+  } else if (eng === 'kokoro' && k.status === 'error') {
+    hint(`⚠️ Local voice model failed to load: ${k.error || 'unknown error'}`);
+  }
 }
 
 function updateOnAir() {
@@ -270,11 +300,15 @@ function onTime(cur, dur) {
 
 function decideSegmentType() {
   const cfg = state.config;
+  // Scripts come from whichever text backend is configured (Ollama or Gemini);
+  // with neither there's nothing to say, so don't even ask the server.
+  const canTalk = Boolean(state.text?.provider);
+  if (!canTalk) return null;
   const newsEvery = (cfg.news?.everyMinutes ?? 45) * 60000;
   const handoffEvery = (cfg.dj?.handoffEveryMinutes ?? 60) * 60000;
-  if (cfg.news?.enabled !== false && state.hasKey && Date.now() - lastNewsAt >= newsEvery) return 'news';
-  if (state.hasKey && roster().length > 1 && Date.now() - lastHandoffAt >= handoffEvery) return 'handoff';
-  if (state.hasKey && songsSinceIntro >= (cfg.dj?.introEverySongs ?? 1)) return 'intro';
+  if (cfg.news?.enabled !== false && Date.now() - lastNewsAt >= newsEvery) return 'news';
+  if (roster().length > 1 && Date.now() - lastHandoffAt >= handoffEvery) return 'handoff';
+  if (songsSinceIntro >= (cfg.dj?.introEverySongs ?? 1)) return 'intro';
   return null;
 }
 
@@ -296,8 +330,11 @@ async function prefetch() {
       }
       const seg = await api.segment(body);
       if (!seg.skip) segment = { ...seg, type };
-      else if (seg.reason === 'kokoro-loading') hint('Local voice model still loading — DJ starts once it\'s ready.');
+      else if (seg.reason === 'kokoro-loading') { hint('Local voice model still loading — DJ starts once it\'s ready.'); pollKokoro(); }
+      else if (seg.reason === 'kokoro-error') hint(`⚠️ Local voice model failed to load: ${seg.message || 'unknown error'} — retrying in the background.`);
+      else if (seg.reason === 'no-text-provider') hint('⚠️ No text backend — set OLLAMA_URL or GEMINI_API_KEY in .env and restart.');
       else if (seg.rateLimited) hint('Gemini rate-limited — skipping this DJ break. It will retry later.');
+      else if (seg.reason) hint(`DJ break skipped: ${seg.reason}${seg.message ? ` — ${seg.message}` : ''}`);
     }
     pending = { track, segment };
     prefetched = true;
@@ -355,7 +392,8 @@ async function doTransition() {
 
 // One-off DJ talk over the current song (doesn't change track).
 async function talkNow(type) {
-  if (!started || !state.hasKey) { hint('Start the station first (needs a Gemini key).'); return; }
+  if (!started) { hint('Start the station first.'); return; }
+  if (!state.text?.provider) { hint('No text backend — set OLLAMA_URL or GEMINI_API_KEY in .env and restart.'); return; }
   const prevId = history[history.length - 2];
   const dj = onAirDj();
   const body = type === 'news'
@@ -365,9 +403,9 @@ async function talkNow(type) {
   const seg = await api.segment(body);
   hint('');
   if (seg.skip) {
-    hint(seg.reason === 'kokoro-loading'
-      ? 'Local voice model is still loading — try again in a moment.'
-      : `No segment: ${seg.reason}${seg.rateLimited ? ' (rate-limited)' : ''}`);
+    if (seg.reason === 'kokoro-loading') hint('Local voice model is still loading — try again in a moment.');
+    else if (seg.reason === 'kokoro-error') hint(`⚠️ Local voice model failed to load: ${seg.message || 'unknown error'}`);
+    else hint(`No segment: ${seg.reason}${seg.message ? ` — ${seg.message}` : ''}${seg.rateLimited ? ' (rate-limited)' : ''}`);
     return;
   }
   showCaption(seg);

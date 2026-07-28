@@ -1,6 +1,6 @@
 // Chooses the next track according to the active shuffle mode.
 // Modes: random | bpm-asc | bpm-desc | genre | ai-pick
-import { generateJson } from '../ai/gemini.js';
+import { generateJson } from '../ai/text.js';
 
 const RECENT_WINDOW = 12;
 

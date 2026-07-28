@@ -1,7 +1,7 @@
 // Fetches the configured RSS feeds and turns them into a spoken news break,
 // read in the current DJ's voice with the mood the user tagged each feed.
 import Parser from 'rss-parser';
-import { generateText } from './gemini.js';
+import { generateText } from './text.js';
 import { cleanScript } from './clean.js';
 
 const parser = new Parser({ timeout: 10000 });
