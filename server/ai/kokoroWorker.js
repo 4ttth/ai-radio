@@ -7,7 +7,7 @@
 // a 'load' message rather than by respawning the thread.
 import { parentPort, workerData } from 'node:worker_threads';
 import { env as tenv } from '@huggingface/transformers';
-import { KokoroTTS } from 'kokoro-js';
+import { KokoroTTS, TextSplitterStream } from 'kokoro-js';
 import { pcmToWav, floatToPcm16 } from './wav.js';
 
 // Keep the (~80MB) model files under the app's data/ dir instead of a global cache.
@@ -43,7 +43,12 @@ async function load() {
 
 load();
 
-parentPort.on('message', async (msg) => {
+// One inference at a time. The app pre-generates a segment ahead, so requests
+// can overlap; running them concurrently on one ONNX session just makes both
+// slower and fights the audio thread for cores.
+let queue = Promise.resolve();
+
+parentPort.on('message', (msg) => {
   if (!msg) return;
   if (msg.type === 'load') {
     // Retry after a failed load. Always answer, even when there's nothing to
@@ -53,6 +58,10 @@ parentPort.on('message', async (msg) => {
     return;
   }
   if (msg.type !== 'gen') return;
+  queue = queue.then(() => synthesize(msg));
+});
+
+async function synthesize(msg) {
   const { id, text } = msg;
   const voice = voiceSet.has(msg.voice) ? msg.voice : workerData.defaultVoice;
   try {
@@ -60,9 +69,19 @@ parentPort.on('message', async (msg) => {
     // Stream sentence-by-sentence and concatenate. Single-shot generate()
     // tokenizes with truncation, so long scripts get cut off; streaming splits
     // the text first and never truncates.
+    //
+    // Feed a splitter we close ourselves. Handing stream() a plain string makes
+    // kokoro-js build one internally and never close it, and its iterator only
+    // ends on close — so the loop would yield every complete sentence and then
+    // hang forever, and the trailing fragment (anything after the last ".") is
+    // only flushed by close(), so it would never be spoken at all.
+    const splitter = new TextSplitterStream();
+    splitter.push(text);
+    splitter.close();
+
     const chunks = [];
     let rate = 24000;
-    for await (const part of tts.stream(text, { voice })) {
+    for await (const part of tts.stream(splitter, { voice })) {
       if (part.audio && part.audio.audio && part.audio.audio.length) {
         chunks.push(part.audio.audio);
         rate = part.audio.sampling_rate || rate;
@@ -81,4 +100,4 @@ parentPort.on('message', async (msg) => {
   } catch (e) {
     parentPort.postMessage({ type: 'error', id, error: String((e && e.message) || e) });
   }
-});
+}
