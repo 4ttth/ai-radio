@@ -210,7 +210,11 @@ export default async function routes(app) {
         : (result.dj?.voice || 'Kore');
       const t0 = Date.now();
       const audio = await renderVoice(result.text, voice, { engine });
-      req.log.info(`segment(${type}) voice=${voice} engine=${audio.engineUsed} chars=${result.text.length} ms=${Date.now() - t0}`);
+      const ms = Date.now() - t0;
+      // chars/sec makes a slow local voice measurable — it's the number to watch
+      // when tuning KOKORO_DTYPE.
+      const rate = ms > 0 ? ` rate=${(result.text.length / (ms / 1000)).toFixed(1)}ch/s` : '';
+      req.log.info(`segment(${type}) voice=${voice} engine=${audio.engineUsed} chars=${result.text.length} ms=${ms}${rate}`);
       return {
         type,
         script: result.text,

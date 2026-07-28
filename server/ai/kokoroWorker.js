@@ -64,6 +64,10 @@ parentPort.on('message', (msg) => {
 async function synthesize(msg) {
   const { id, text } = msg;
   const voice = voiceSet.has(msg.voice) ? msg.voice : workerData.defaultVoice;
+  // Tell the manager the clock starts now, not when this was queued — CPU
+  // synthesis is slow enough that time spent waiting behind another clip would
+  // otherwise eat the whole timeout budget.
+  parentPort.postMessage({ type: 'started', id });
   try {
     if (!tts) throw new Error('model not loaded yet');
     // Stream sentence-by-sentence and concatenate. Single-shot generate()
