@@ -1,6 +1,9 @@
 // Gemini API client: text generation + text-to-speech, with a gentle
 // request throttle so a listening session stays inside free-tier limits.
 import { env, hasGeminiKey } from '../config.js';
+import { pcmToWav } from './wav.js';
+
+export { pcmToWav };
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -251,25 +254,4 @@ export async function synthesizeSpeech(text, { voiceName = 'Kore' } = {}) {
 function parseRate(mimeType = '') {
   const m = /rate=(\d+)/.exec(mimeType);
   return m ? Number(m[1]) : null;
-}
-
-// Wrap raw little-endian 16-bit PCM in a 44-byte WAV header.
-export function pcmToWav(pcm, { sampleRate = 24000, channels = 1, bitsPerSample = 16 } = {}) {
-  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
-  const blockAlign = (channels * bitsPerSample) / 8;
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16); // fmt chunk size
-  header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(channels, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(bitsPerSample, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
 }

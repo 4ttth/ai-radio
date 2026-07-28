@@ -21,6 +21,9 @@ export const env = {
   textModel: process.env.GEMINI_TEXT_MODEL || '',
   ttsModel: process.env.GEMINI_TTS_MODEL || '',
   nativeModel: process.env.GEMINI_NATIVE_MODEL || '', // Live API native-audio voice engine
+  // Local, offline text generation via Ollama (no API key needed).
+  ollamaUrl: (process.env.OLLAMA_URL || '').replace(/\/+$/, ''),
+  ollamaModel: process.env.OLLAMA_MODEL || 'phi4-mini',
   // Local, offline Kokoro TTS (runs in-process on CPU; no API key needed).
   kokoroModel: process.env.KOKORO_MODEL || 'onnx-community/Kokoro-82M-v1.0-ONNX',
   kokoroDtype: process.env.KOKORO_DTYPE || 'q8',
@@ -34,6 +37,12 @@ export const env = {
 
 export function hasGeminiKey() {
   return Boolean(env.geminiKey && env.geminiKey.trim() && env.geminiKey !== 'your-gemini-api-key-here');
+}
+
+// Ollama is "configured" as soon as OLLAMA_URL is set — reachability is a
+// separate, runtime question (see ai/ollama.js).
+export function hasOllama() {
+  return Boolean(env.ollamaUrl && env.ollamaUrl.trim());
 }
 
 // ── Branding catalogue (the six station imagings) ─────────────

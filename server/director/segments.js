@@ -7,15 +7,20 @@ import crypto from 'node:crypto';
 import { synthesizeSpeech } from '../ai/gemini.js';
 import { synthesizeSpeechNative } from '../ai/liveVoice.js';
 import { synthesizeKokoro, kokoroStatus, preloadKokoro } from '../ai/kokoroVoice.js';
-import { CACHE_DIR } from '../config.js';
+import { CACHE_DIR, env } from '../config.js';
 
 const hash = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 16);
+
+// Cache-key token per engine. Bump one when a change makes already-cached clips
+// undesirable — Kokoro moved from 32-bit float WAV to 16-bit PCM, and those old
+// files would otherwise be served forever to the browsers that can't play them.
+const CACHE_TOKEN = { kokoro: 'kokoro-pcm16' };
 
 // Synthesize `script` in `voiceName` using the chosen engine ('tts' or
 // 'native'), cache by content+engine, and return a servable URL. If the native
 // (Live API) engine fails, fall back to TTS so the radio keeps talking.
 export async function renderVoice(script, voiceName, { engine = 'tts' } = {}) {
-  const id = hash(`${engine}::${voiceName}::${script}`);
+  const id = hash(`${CACHE_TOKEN[engine] || engine}::${voiceName}::${script}`);
   const file = path.join(CACHE_DIR, `${id}.wav`);
   let engineUsed = engine;
   if (existsSync(file)) return { id, audioUrl: `/api/audio/${id}`, engineUsed: `${engine} (cached)` };
@@ -25,12 +30,16 @@ export async function renderVoice(script, voiceName, { engine = 'tts' } = {}) {
     // Local model: if it isn't loaded yet, start loading and skip this break
     // (the music keeps playing) rather than blocking on a first-run download.
     if (kokoroStatus().status !== 'ready') {
-      preloadKokoro();
-      const e = new Error('local voice model is still loading');
-      e.reason = 'kokoro-loading';
+      const after = preloadKokoro(); // nudges a retry if the last load failed
+      const failed = after.status === 'error';
+      const e = new Error(failed
+        ? `local voice model failed to load: ${after.error}`
+        : 'local voice model is still loading');
+      // Distinct reasons: "loading" is worth waiting out, "error" needs the user.
+      e.reason = failed ? 'kokoro-error' : 'kokoro-loading';
       throw e;
     }
-    wav = await synthesizeKokoro(script, voiceName);
+    wav = await synthesizeKokoro(script, voiceName || env.kokoroVoice);
   } else if (engine === 'native') {
     try {
       wav = await synthesizeSpeechNative(script, { voiceName });

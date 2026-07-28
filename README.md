@@ -1,6 +1,6 @@
 # 📻 AI Radio
 
-Turn a folder of music into your own AI-powered radio station — with rotating AI **DJs** who talk over the mix, describe the next song's name, artist and *feel*, hand off to each other every hour, and read **news** from RSS feeds you choose. Powered by the **Google Gemini API** (text + text-to-speech).
+Turn a folder of music into your own AI-powered radio station — with rotating AI **DJs** who talk over the mix, describe the next song's name, artist and *feel*, hand off to each other every hour, and read **news** from RSS feeds you choose. Run it on the **Google Gemini API**, or entirely offline on **Ollama + Kokoro** with no API key at all.
 
 Runs as a small local web app: a Node backend scans your library and generates the AI segments; your browser handles smooth playback, crossfades, and talk-over ducking with the Web Audio API.
 
@@ -55,9 +55,20 @@ npm start
 
 In the browser: set your **music folder** path → **Scan** → press **▶**. Add RSS feeds and tweak DJ/news cadence in the side panel.
 
-> Without a Gemini key the station still **plays music** — the DJs and news are simply silent until a key is set. This makes it easy to try the player first.
+**Prefer to run it entirely offline?** Point it at a local [Ollama](https://ollama.com) instead of Gemini — no API key, no rate limits, nothing leaves your machine:
 
-See **[docs/SETUP.md](docs/SETUP.md)** for getting a Gemini key, installing ffmpeg (for BPM analysis), and troubleshooting.
+```bash
+ollama pull phi4-mini
+# in .env:
+#   OLLAMA_URL=http://127.0.0.1:11434
+#   OLLAMA_MODEL=phi4-mini
+```
+
+With `OLLAMA_URL` set, the scripts are written locally; with no Gemini key the voice engine automatically uses local **Kokoro** too, so the whole station is offline (after a one-time ~80 MB voice-model download).
+
+> Without *any* text backend — no `OLLAMA_URL` and no `GEMINI_API_KEY` — the station still **plays music**; the DJs and news are simply silent. This makes it easy to try the player first.
+
+See **[docs/SETUP.md](docs/SETUP.md)** for setting up Ollama or a Gemini key, installing ffmpeg (for BPM analysis), and troubleshooting.
 
 ---
 
@@ -81,6 +92,8 @@ See **[docs/SETUP.md](docs/SETUP.md)** for getting a Gemini key, installing ffmp
 | `GEMINI_TEXT_MODEL` | *(auto)* | Force a text model; blank auto-detects the best your key has |
 | `GEMINI_TTS_MODEL` | *(auto)* | Force a TTS model; blank auto-detects the best your key has |
 | `GEMINI_NATIVE_MODEL` | *(auto)* | Force the native-audio (Live API) model; used only when Voice engine = Native |
+| `OLLAMA_URL` | — | Local Ollama address (e.g. `http://127.0.0.1:11434`). Set it and DJ/news scripts are written locally instead of by Gemini |
+| `OLLAMA_MODEL` | `phi4-mini` | Which Ollama model writes the scripts |
 | `KOKORO_MODEL` | `onnx-community/Kokoro-82M-v1.0-ONNX` | Local TTS model (used when Voice engine = Local) |
 | `KOKORO_DTYPE` | `q8` | Local model precision: `fp32` / `fp16` / `q8` / `q4` / `q4f16` |
 | `KOKORO_DEVICE` | `cpu` | `cpu` (Node) or `webgpu` |
@@ -97,9 +110,19 @@ Under **AI DJ → Voice engine** you can pick how DJ/news audio is produced:
 
 - **Gemini TTS** (default) — the dedicated Gemini TTS model over a simple REST call. Reads scripts and news *verbatim*, is cheap, and caches perfectly. Best for a radio station. Free-tier requests/minute are limited, which is why segments are pre-generated and cached.
 - **Gemini native audio (Live API)** — a native-audio model over a WebSocket (`BidiGenerateContent`). More expressive/natural and uses a different quota model (sessions rather than strict RPM), but it's conversational by design, so it's pinned with a system instruction to read text verbatim. **Experimental.** If a live session fails for any reason, it automatically falls back to the TTS model so the radio never goes silent.
-- **Local · Kokoro TTS** — the open-source [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model running **100% locally on CPU** inside the Node server (via `kokoro-js`), in a worker thread so synthesis never stutters playback. **Free, offline, and rate-limit-free.** On first use it downloads ~80 MB of model files into `data/models/` (you'll see a load-progress indicator; DJ breaks are skipped until it's ready). Each DJ maps to a fitting Kokoro voice (`af_heart`, `am_puck`, `bm_george`, …), editable per DJ in `branding/stations.json`. *Note:* DJ/news **scripts** are still written by Gemini text — Kokoro only replaces the voice, which is where the free-tier limits were tightest.
+- **Local · Kokoro TTS** — the open-source [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model running **100% locally on CPU** inside the Node server (via `kokoro-js`), in a worker thread so synthesis never stutters playback. **Free, offline, and rate-limit-free.** On first use it downloads ~80 MB of model files into `data/models/` (you'll see a load-progress indicator; DJ breaks are skipped until it's ready). Each DJ maps to a fitting Kokoro voice (`af_heart`, `am_puck`, `bm_george`, …), editable per DJ in `branding/stations.json`. Pair it with `OLLAMA_URL` and the station needs no API key at all; if a load fails it reports the reason and retries by itself.
 
-All three cache clips to disk, keyed by engine + voice + text, so the same line is never synthesized twice within an engine.
+Kokoro is selected automatically when there's no Gemini key — the other two engines can't work without one. All three cache clips to disk as 16-bit PCM WAV, keyed by engine + voice + text, so the same line is never synthesized twice within an engine.
+
+### Where the words come from
+
+DJ scripts, news bulletins and "let AI pick" sequencing all go through one router (`server/ai/text.js`):
+
+| `.env` | Scripts written by |
+|---|---|
+| `OLLAMA_URL` set | Your local Ollama model (falls back to Gemini only if Ollama is down *and* a key exists) |
+| `GEMINI_API_KEY` only | Gemini |
+| neither | Nobody — music plays, DJs stay silent |
 
 ---
 
@@ -109,7 +132,10 @@ All three cache clips to disk, keyed by engine + voice + text, so the same line 
 server/
   index.js            Fastify server + static UI + startup scan
   config.js           env + persisted station config + branding catalogue
-  ai/gemini.js        Gemini client: text, TTS, model auto-detect, throttle, PCM→WAV
+  ai/text.js          Text router: sends script generation to Ollama or Gemini
+  ai/ollama.js        Local Ollama client: text/JSON generation + health check
+  ai/gemini.js        Gemini client: text, TTS, model auto-detect, throttle
+  ai/wav.js           Shared WAV encoding (all engines emit 16-bit PCM mono)
   ai/liveVoice.js     Native-audio (Live API) voice engine over WebSocket (optional)
   ai/kokoroVoice.js   Local Kokoro TTS manager: worker lifecycle + load status
   ai/kokoroWorker.js  Worker thread running Kokoro on CPU (kokoro-js/ONNX)

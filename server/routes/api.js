@@ -2,7 +2,7 @@
 import { createReadStream, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import {
-  loadConfig, saveConfig, getBranding, getDjRoster, loadBranding, hasGeminiKey, env,
+  loadConfig, saveConfig, getBranding, getDjRoster, loadBranding, hasGeminiKey, hasOllama, env,
 } from '../config.js';
 import {
   scan, getTracks, getTrack, getFolderRoot, analyzeMissingBpm,
@@ -13,6 +13,8 @@ import { introScript, handoffScript, welcomeScript, djForHour } from '../ai/dj.j
 import { fetchNews, newsScript } from '../ai/news.js';
 import { renderVoice, readCached } from '../director/segments.js';
 import { getModels } from '../ai/gemini.js';
+import { provider as textProvider, textProviderLabel, hasTextProvider } from '../ai/text.js';
+import { checkOllama, isOllamaReachable, hasOllamaModel } from '../ai/ollama.js';
 import { kokoroStatus, preloadKokoro } from '../ai/kokoroVoice.js';
 
 let bpmProgress = { running: false, analyzed: 0, total: 0, done: false };
@@ -28,6 +30,15 @@ const publicTrack = (t) => t && ({
   streamUrl: `/api/track/${t.id}`,
 });
 
+// Which voice engine actually gets used. Gemini TTS and the Live API both need
+// a key, so a keyless (Ollama + local) station falls back to Kokoro rather than
+// failing every break against an API it can't call.
+export function resolveVoiceEngine(cfg) {
+  const wanted = ['native', 'kokoro'].includes(cfg.voiceEngine) ? cfg.voiceEngine : 'tts';
+  if (wanted !== 'kokoro' && !hasGeminiKey()) return 'kokoro';
+  return wanted;
+}
+
 async function buildState() {
   const config = await loadConfig();
   const branding = await getBranding(config.brandingId);
@@ -37,6 +48,14 @@ async function buildState() {
   return {
     hasKey: hasGeminiKey(),
     models: { text: models.text, tts: models.tts, native: models.native, discovered: models.discovered },
+    text: {
+      provider: textProvider(),
+      label: textProviderLabel(),
+      ollama: hasOllama()
+        ? { url: env.ollamaUrl, model: env.ollamaModel, reachable: isOllamaReachable(), modelInstalled: hasOllamaModel() }
+        : null,
+    },
+    voiceEngine: resolveVoiceEngine(config),
     kokoro: kokoroStatus(),
     config,
     branding,
@@ -70,12 +89,19 @@ export default async function routes(app) {
       await scan(cfg.musicFolder);
     }
     // Start loading the local model as soon as the user selects it.
-    if (patch.voiceEngine === 'kokoro') preloadKokoro();
+    if (resolveVoiceEngine(cfg) === 'kokoro') preloadKokoro();
     return buildState();
   });
 
   // Begin loading the local Kokoro model (returns current load status).
-  app.post('/api/kokoro/preload', async () => preloadKokoro());
+  // Explicit user action, so it retries immediately after a failed load.
+  app.post('/api/kokoro/preload', async () => preloadKokoro({ force: true }));
+
+  // Re-probe the local Ollama daemon (also refreshes its installed-model list).
+  app.post('/api/ollama/check', async () => {
+    await checkOllama();
+    return { configured: hasOllama(), url: env.ollamaUrl, model: env.ollamaModel, reachable: isOllamaReachable(), modelInstalled: hasOllamaModel() };
+  });
 
   // Scan (or rescan) the music folder.
   app.post('/api/scan', async (req) => {
@@ -143,7 +169,8 @@ export default async function routes(app) {
 
   // Generate an AI DJ or news segment: script + synthesized audio URL.
   app.post('/api/segment', async (req, reply) => {
-    if (!hasGeminiKey()) return { skip: true, reason: 'no-key' };
+    // Scripts can come from Ollama or Gemini — only having neither is fatal.
+    if (!hasTextProvider()) return { skip: true, reason: 'no-text-provider' };
     const { type = 'intro', currentId, nextId, djId, outgoingId, incomingId } = req.body || {};
     const cfg = await loadConfig();
     const branding = await getBranding(cfg.brandingId);
@@ -173,10 +200,13 @@ export default async function routes(app) {
         });
       }
 
-      if (!result || !result.text) return { skip: true, reason: 'empty' };
-      const engine = ['native', 'kokoro'].includes(cfg.voiceEngine) ? cfg.voiceEngine : 'tts';
+      if (!result || !result.text) {
+        req.log.warn(`segment(${type}) produced an empty script — the model returned nothing usable`);
+        return { skip: true, reason: 'empty' };
+      }
+      const engine = resolveVoiceEngine(cfg);
       const voice = engine === 'kokoro'
-        ? (result.dj?.kokoroVoice || 'af_heart')
+        ? (result.dj?.kokoroVoice || env.kokoroVoice)
         : (result.dj?.voice || 'Kore');
       const t0 = Date.now();
       const audio = await renderVoice(result.text, voice, { engine });

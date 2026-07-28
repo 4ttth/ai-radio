@@ -1,6 +1,6 @@
 // Generates the spoken scripts an AI DJ says on air.
 // Every script is spoken words ONLY (no stage directions) so TTS reads it cleanly.
-import { generateText } from './gemini.js';
+import { generateText } from './text.js';
 import { cleanScript } from './clean.js';
 
 // Which DJ is on air for a given hour — rotates through the roster.

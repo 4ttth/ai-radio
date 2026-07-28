@@ -26,18 +26,43 @@ export class OllamaError extends Error {
 
 // ── Health check ──────────────────────────────────────────────
 let _ollamaOk = null;
+let _ollamaModels = [];
+
+// Ask Ollama for its installed models: proves the daemon is up *and* tells us
+// whether the model we're configured to use is actually pulled.
 export async function checkOllama() {
+  if (!ollamaConfigured()) {
+    _ollamaOk = false;
+    _ollamaModels = [];
+    return false;
+  }
   try {
-    const res = await fetchWithTimeout(env.ollamaUrl, {}, 5000);
-    _ollamaOk = res.ok;
+    const res = await fetchWithTimeout(`${env.ollamaUrl}/api/tags`, {}, 5000);
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json().catch(() => ({}));
+    _ollamaModels = (data.models || []).map((m) => m.name).filter(Boolean);
+    _ollamaOk = true;
   } catch {
     _ollamaOk = false;
+    _ollamaModels = [];
   }
   return _ollamaOk;
 }
 
 export function isOllamaReachable() {
   return _ollamaOk === true;
+}
+
+export function ollamaModels() {
+  return _ollamaModels.slice();
+}
+
+// Ollama tags carry a ":tag" suffix ("phi4-mini:latest"), so match on the
+// base name too — otherwise a perfectly good install looks missing.
+export function hasOllamaModel(name = env.ollamaModel) {
+  if (!_ollamaModels.length) return null; // unknown (not checked / unreachable)
+  const want = String(name).split(':')[0];
+  return _ollamaModels.some((m) => m === name || m.split(':')[0] === want);
 }
 
 // ── Text generation via Ollama OpenAI-compatible API ──────────
@@ -89,6 +114,9 @@ async function callOllama(messages, { temperature = 0.9, maxTokens = 512, jsonMo
       await sleep(1200 * 2 ** attempt);
       continue;
     }
+    if (res.status === 404) {
+      throw new OllamaError(`Ollama has no model "${env.ollamaModel}" — run: ollama pull ${env.ollamaModel}`, 404);
+    }
     throw new OllamaError(`Ollama ${env.ollamaModel} → ${res.status}: ${text.slice(0, 300)}`, res.status);
   }
 }
@@ -114,30 +142,8 @@ export async function generateJson(prompt, opts = {}) {
     return JSON.parse(raw);
   } catch {
     // Best-effort: pull the first {...} or [...] block out of the response.
-    const match = raw.match(/[{[][\\s\\S]*[\\]}]/);
+    const match = raw.match(/[[{][\s\S]*[\]}]/);
     if (match) return JSON.parse(match[0]);
     throw new OllamaError(`Could not parse JSON from model: ${raw.slice(0, 200)}`, 422);
   }
-}
-
-// ── Utility: wrap raw PCM in a WAV header ─────────────────────
-// (Kept here as a shared utility used by Kokoro and other voice modules.)
-export function pcmToWav(pcm, { sampleRate = 24000, channels = 1, bitsPerSample = 16 } = {}) {
-  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
-  const blockAlign = (channels * bitsPerSample) / 8;
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16); // fmt chunk size
-  header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(channels, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(bitsPerSample, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
 }
